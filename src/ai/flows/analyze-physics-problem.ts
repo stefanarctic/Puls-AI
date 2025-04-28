@@ -39,7 +39,7 @@ export async function analyzePhysicsProblem(input: AnalyzePhysicsProblemInput): 
 }
 
 const prompt = ai.definePrompt({
-  name: 'analyzePhysicsProblemPromptRomanianV3',
+  name: 'analyzePhysicsProblemPromptRomanianV4', // Increment version due to prompt change
   input: {
     schema: z.object({
       problemText: z.string().describe('Textul problemei de fizică.'),
@@ -57,7 +57,7 @@ const prompt = ai.definePrompt({
       rating: z.string().describe('Punctajul obținut (ex: "7/10 puncte") bazat pe corectitudinea soluției din imagini în comparație cu baremul intern, în limba română.'),
     }),
   },
-  // Updated prompt to use problemText and loop through solutionPhotoDataUris
+  // Updated prompt to use problemText and loop through solutionPhotoDataUris, removing the 'add' helper
   prompt: `Ești un expert în rezolvarea problemelor de fizică și un evaluator corect. Analizează problema de fizică descrisă mai jos și soluția încercată de utilizator, prezentată în imaginile următoare.
 
 Textul Problemei:
@@ -65,7 +65,7 @@ Textul Problemei:
 
 Imagini cu Soluția Utilizatorului:
 {{#each solutionPhotoDataUris}}
-Imagine {{add @index 1}}:
+Imagine (Index {{@index}}):
 {{media url=this}}
 {{/each}}
 
@@ -77,12 +77,12 @@ Oferă următoarele informații:
 1.  **Soluția corectă:** Prezintă pașii detaliați și rezultatul final corect al problemei descrise în text.
 2.  **Analiza erorilor:** Evidențiază orice greșeală făcută în soluția din imagini. Explică de ce este o greșeală. Dacă soluția din imagini este complet corectă, menționează explicit: "Soluția prezentată în imagini este corectă. Nu au fost detectate erori."
 3.  **Punctaj:** Calculează și returnează un punctaj sub formă de "X/10 puncte", unde X este numărul de puncte acordate pe baza corectitudinii soluției din imagini, conform baremului intern descris mai sus.`,
-  // Register a Handlebars helper to increment index for display
-  custom: {
-    handlebarsHelpers: {
-      add: (a: number, b: number) => a + b,
-    }
-  }
+  // Removed the custom helper as it caused errors and is not strictly necessary
+  // custom: {
+  //   handlebarsHelpers: {
+  //     add: (a: number, b: number) => a + b,
+  //   }
+  // }
 });
 
 const analyzePhysicsProblemFlow = ai.defineFlow<
@@ -90,12 +90,13 @@ const analyzePhysicsProblemFlow = ai.defineFlow<
   typeof AnalyzePhysicsProblemOutputSchema
 >(
   {
-    name: 'analyzePhysicsProblemFlowV2', // Renamed flow to reflect change
-    inputSchema: AnalyzePhysicsProblemInputSchema, // Updated input schema
-    outputSchema: AnalyzePhysicsProblemOutputSchema, // Output schema remains the same
+    name: 'analyzePhysicsProblemFlowV3', // Increment version due to prompt change
+    inputSchema: AnalyzePhysicsProblemInputSchema,
+    outputSchema: AnalyzePhysicsProblemOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input); // Pass the new input structure with array of URIs
+    const {output} = await prompt(input);
     return output!;
   }
 );
+
