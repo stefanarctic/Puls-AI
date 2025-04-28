@@ -1,3 +1,4 @@
+
 'use server';
 
 // Import the updated types and function
@@ -10,10 +11,17 @@ interface ActionResult<T> {
   error?: string;
 }
 
-// Updated action to use the new AnalyzePhysicsProblemInput type (problemText + solutionPhotoDataUri)
+// Action now uses the AnalyzePhysicsProblemInput which expects an array for solutionPhotoDataUris
 export async function handleAnalyzeProblem(input: AnalyzePhysicsProblemInput): Promise<ActionResult<AnalyzePhysicsProblemOutput>> {
   try {
-    // The input now contains problemText and solutionPhotoDataUri
+    // The input now contains problemText and an array: solutionPhotoDataUris
+    if (!input.solutionPhotoDataUris || input.solutionPhotoDataUris.length === 0) {
+        return { error: 'Este necesară cel puțin o imagine cu soluția.' };
+    }
+    if (!input.problemText || input.problemText.trim() === '') {
+       return { error: 'Textul problemei nu poate fi gol.' };
+    }
+
     const result = await analyzePhysicsProblem(input);
     return { data: result };
   } catch (error) {

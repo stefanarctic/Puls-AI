@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ChangeEvent } from 'react';
@@ -6,43 +7,65 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea"; // Import Textarea
+import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon } from 'lucide-react'; // Added icons
+import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon, Trash2 } from 'lucide-react'; // Added Trash2
 import Image from 'next/image';
 import { handleAnalyzeProblem } from './actions';
 import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/use-toast";
+
+interface SolutionImage {
+  file: File;
+  previewUrl: string;
+}
 
 export default function PhysicsProblemSolverPage() {
-  const [problemText, setProblemText] = useState<string>(''); // State for problem text
-  const [solutionImageFile, setSolutionImageFile] = useState<File | null>(null); // Renamed state
-  const [solutionImagePreview, setSolutionImagePreview] = useState<string | null>(null); // Renamed state
+  const [problemText, setProblemText] = useState<string>('');
+  const [solutionImages, setSolutionImages] = useState<SolutionImage[]>([]); // State for multiple images
   const [analysisResult, setAnalysisResult] = useState<AnalyzePhysicsProblemOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const solutionInputRef = useRef<HTMLInputElement>(null); // Renamed ref
-  const { toast } = useToast()
+  const solutionInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  const handleFileChange = (
-    e: ChangeEvent<HTMLInputElement>,
-    setFile: React.Dispatch<React.SetStateAction<File | null>>,
-    setPreview: React.Dispatch<React.SetStateAction<string | null>>
-  ) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-      setError(null); // Clear error when a new file is selected
-    } else {
-        setFile(null);
-        setPreview(null);
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      const newImages: SolutionImage[] = [];
+      let fileReadPromises: Promise<void>[] = [];
+
+      files.forEach(file => {
+        const reader = new FileReader();
+        const promise = new Promise<void>((resolve, reject) => {
+            reader.onloadend = () => {
+              newImages.push({ file, previewUrl: reader.result as string });
+              resolve();
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+        fileReadPromises.push(promise);
+      });
+
+      Promise.all(fileReadPromises).then(() => {
+          setSolutionImages(prevImages => [...prevImages, ...newImages]);
+          setError(null); // Clear error when new files are added
+          // Reset file input to allow selecting the same file again if needed
+          if (solutionInputRef.current) {
+              solutionInputRef.current.value = '';
+          }
+      }).catch(err => {
+          console.error("Error reading files:", err);
+          setError("A apărut o eroare la citirea imaginilor.");
+          toast({
+              variant: "destructive",
+              title: "Eroare la încărcare",
+              description: "Nu s-au putut încărca toate imaginile selectate.",
+          });
+      });
     }
   };
 
@@ -50,6 +73,10 @@ export default function PhysicsProblemSolverPage() {
       setProblemText(e.target.value);
       setError(null); // Clear error when text changes
   }
+
+  const removeImage = (indexToRemove: number) => {
+    setSolutionImages(prevImages => prevImages.filter((_, index) => index !== indexToRemove));
+  };
 
   const handleSubmit = async () => {
     if (!problemText.trim()) {
@@ -61,12 +88,12 @@ export default function PhysicsProblemSolverPage() {
         })
         return;
     }
-    if (!solutionImageFile) {
-      setError('Te rog încarcă imaginea cu rezolvarea.');
+    if (solutionImages.length === 0) { // Check if array is empty
+      setError('Te rog încarcă cel puțin o imagine cu rezolvarea.');
       toast({
           variant: "destructive",
           title: "Eroare",
-          description: "Te rog încarcă imaginea cu rezolvarea.",
+          description: "Te rog încarcă cel puțin o imagine cu rezolvarea.",
         })
       return;
     }
@@ -77,12 +104,12 @@ export default function PhysicsProblemSolverPage() {
     setAnalysisResult(null);
 
     try {
-      const solutionPhotoDataUri = solutionImagePreview!;
+      const solutionPhotoDataUris = solutionImages.map(img => img.previewUrl); // Get array of data URIs
 
-      // Pass problem text and solution photo URI to the action
+      // Pass problem text and array of solution photo URIs to the action
       const result = await handleAnalyzeProblem({
         problemText,
-        solutionPhotoDataUri,
+        solutionPhotoDataUris, // Pass the array
       });
 
       if (result.error) {
@@ -94,6 +121,9 @@ export default function PhysicsProblemSolverPage() {
           })
       } else {
         setAnalysisResult(result.data);
+        // Optionally clear inputs after successful analysis
+        // setProblemText('');
+        // setSolutionImages([]);
       }
     } catch (err) {
       console.error('Error analyzing problem:', err);
@@ -113,25 +143,43 @@ export default function PhysicsProblemSolverPage() {
     ref.current?.click();
   };
 
-  const renderPreview = (preview: string | null, label: string) => {
-      if (preview) {
-          return <Image src={preview} alt={`${label} preview`} width={300} height={200} className="mt-2 rounded-md object-contain border" />; // Slightly larger preview
+  // Function to render previews for multiple images
+  const renderPreviews = () => {
+      if (solutionImages.length === 0) {
+          return <div className="mt-2 h-[100px] w-full flex items-center justify-center border rounded-md bg-secondary"><span className="text-muted-foreground text-sm">Nicio imagine încărcată</span></div>;
       }
-      return <div className="mt-2 h-[200px] w-[300px] flex items-center justify-center border rounded-md bg-secondary"><span className="text-muted-foreground text-sm">Nicio imagine încărcată</span></div>;
+      return (
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              {solutionImages.map((image, index) => (
+                  <div key={index} className="relative group aspect-square">
+                      <Image src={image.previewUrl} alt={`Rezolvare ${index + 1}`} layout="fill" className="rounded-md object-contain border" />
+                      <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => removeImage(index)}
+                          aria-label="Șterge imaginea"
+                      >
+                          <Trash2 className="h-4 w-4" />
+                      </Button>
+                  </div>
+              ))}
+          </div>
+      );
   }
 
   return (
     <div className="min-h-screen bg-secondary flex flex-col items-center justify-center p-4">
-      <Card className="w-full max-w-2xl shadow-lg">
+      <Card className="w-full max-w-3xl shadow-lg"> {/* Increased max-width slightly */}
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-primary text-center">Analizator Probleme Fizică</CardTitle>
           <CardDescription className="text-center text-muted-foreground">
-            Introdu textul problemei și încarcă o fotografie cu rezolvarea ta pentru a primi analiză și feedback AI în limba română.
+            Introdu textul problemei și încarcă una sau mai multe fotografii cu rezolvarea ta pentru a primi analiză și feedback AI în limba română.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Grid layout for inputs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Inputs Section */}
+          <div className="space-y-4">
             {/* Problem Text Input */}
             <div className="flex flex-col space-y-2">
               <Label htmlFor="problem-text" className="font-semibold flex items-center gap-2">
@@ -142,27 +190,29 @@ export default function PhysicsProblemSolverPage() {
                 placeholder="Scrie aici enunțul problemei..."
                 value={problemText}
                 onChange={handleTextChange}
-                className="h-40 resize-none" // Adjust height as needed
+                className="h-32 resize-none" // Adjusted height
               />
             </div>
 
             {/* Solution Image Upload */}
-            <div className="flex flex-col items-center space-y-2">
+            <div className="flex flex-col space-y-2">
               <Label htmlFor="solution-image" className="font-semibold flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-primary" /> Imagine Rezolvare
+                <ImageIcon className="w-4 h-4 text-primary" /> Imagini Rezolvare ({solutionImages.length})
               </Label>
               <Input
                 id="solution-image"
                 type="file"
                 accept="image/*"
-                onChange={(e) => handleFileChange(e, setSolutionImageFile, setSolutionImagePreview)}
+                multiple // Allow multiple file selection
+                onChange={handleFileChange}
                 ref={solutionInputRef}
                 className="hidden"
               />
-               <Button variant="outline" onClick={() => triggerFileInput(solutionInputRef)} className="w-full max-w-xs">
-                 {solutionImageFile ? 'Schimbă Imaginea' : 'Încarcă Imagine'}
+               <Button variant="outline" onClick={() => triggerFileInput(solutionInputRef)} className="w-full max-w-xs self-center">
+                 <Upload className="mr-2 h-4 w-4" /> Adaugă Imagini
                </Button>
-              {renderPreview(solutionImagePreview, "Rezolvare")}
+               {/* Render previews */}
+               {renderPreviews()}
             </div>
           </div>
 
@@ -177,7 +227,7 @@ export default function PhysicsProblemSolverPage() {
 
           <Button
             onClick={handleSubmit}
-            disabled={isLoading || !solutionImageFile || !problemText.trim()} // Disable if no solution image OR no problem text
+            disabled={isLoading || solutionImages.length === 0 || !problemText.trim()} // Disable if no solution images OR no problem text
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             {isLoading ? 'Se analizează...' : 'Analizează Problema'}
@@ -220,7 +270,7 @@ export default function PhysicsProblemSolverPage() {
                <Card className="bg-secondary">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Lightbulb className="w-5 h-5 text-yellow-500" /> Analiză Erori & Feedback (bazat pe imaginea rezolvării)
+                    <Lightbulb className="w-5 h-5 text-yellow-500" /> Analiză Erori & Feedback (bazat pe imaginile rezolvării)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
