@@ -10,10 +10,10 @@ interface ActionResult<T> {
   error?: string;
 }
 
-// Updated action to use the new AnalyzePhysicsProblemInput type
+// Updated action to use the new AnalyzePhysicsProblemInput type (problemText + solutionPhotoDataUri)
 export async function handleAnalyzeProblem(input: AnalyzePhysicsProblemInput): Promise<ActionResult<AnalyzePhysicsProblemOutput>> {
   try {
-    // The input now only contains problemPhotoDataUri
+    // The input now contains problemText and solutionPhotoDataUri
     const result = await analyzePhysicsProblem(input);
     return { data: result };
   } catch (error) {

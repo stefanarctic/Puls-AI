@@ -6,24 +6,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea"; // Import Textarea
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Upload, CheckCircle, XCircle, Lightbulb, Star } from 'lucide-react'; // Added Star icon
+import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon } from 'lucide-react'; // Added icons
 import Image from 'next/image';
 import { handleAnalyzeProblem } from './actions';
-import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem'; // Output type includes rating now
+import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
 import { useToast } from "@/hooks/use-toast"
 
 export default function PhysicsProblemSolverPage() {
-  // Remove state related to results table
-  const [problemImageFile, setProblemImageFile] = useState<File | null>(null);
-  const [problemImagePreview, setProblemImagePreview] = useState<string | null>(null);
+  const [problemText, setProblemText] = useState<string>(''); // State for problem text
+  const [solutionImageFile, setSolutionImageFile] = useState<File | null>(null); // Renamed state
+  const [solutionImagePreview, setSolutionImagePreview] = useState<string | null>(null); // Renamed state
   const [analysisResult, setAnalysisResult] = useState<AnalyzePhysicsProblemOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const problemInputRef = useRef<HTMLInputElement>(null);
-  // Remove ref for results table input
+  const solutionInputRef = useRef<HTMLInputElement>(null); // Renamed ref
   const { toast } = useToast()
 
   const handleFileChange = (
@@ -46,29 +46,43 @@ export default function PhysicsProblemSolverPage() {
     }
   };
 
+  const handleTextChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setProblemText(e.target.value);
+      setError(null); // Clear error when text changes
+  }
+
   const handleSubmit = async () => {
-    // Remove check for results table file
-    if (!problemImageFile) {
-      setError('Te rog încarcă imaginea cu problema și rezolvarea.');
+    if (!problemText.trim()) {
+        setError('Te rog introdu textul problemei.');
+        toast({
+            variant: "destructive",
+            title: "Eroare",
+            description: "Te rog introdu textul problemei.",
+        })
+        return;
+    }
+    if (!solutionImageFile) {
+      setError('Te rog încarcă imaginea cu rezolvarea.');
       toast({
           variant: "destructive",
           title: "Eroare",
-          description: "Te rog încarcă imaginea cu problema și rezolvarea.",
+          description: "Te rog încarcă imaginea cu rezolvarea.",
         })
       return;
     }
+
 
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
 
     try {
-      const problemPhotoDataUri = problemImagePreview!;
-      // Remove resultsTableDataUri
+      const solutionPhotoDataUri = solutionImagePreview!;
 
-      // Pass only the problem photo URI to the action
+      // Pass problem text and solution photo URI to the action
       const result = await handleAnalyzeProblem({
-        problemPhotoDataUri,
+        problemText,
+        solutionPhotoDataUri,
       });
 
       if (result.error) {
@@ -112,29 +126,46 @@ export default function PhysicsProblemSolverPage() {
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-primary text-center">Analizator Probleme Fizică</CardTitle>
           <CardDescription className="text-center text-muted-foreground">
-            Încarcă o fotografie cu problema de fizică și rezolvarea ta pentru a primi analiză și feedback AI în limba română.
+            Introdu textul problemei și încarcă o fotografie cu rezolvarea ta pentru a primi analiză și feedback AI în limba română.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Remove the grid layout, center the single upload */}
-          <div className="flex flex-col items-center space-y-2">
-              <Label htmlFor="problem-image" className="font-semibold flex items-center gap-2">
-                <Upload className="w-4 h-4 text-primary" /> Imagine Problemă + Rezolvare
+          {/* Grid layout for inputs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Problem Text Input */}
+            <div className="flex flex-col space-y-2">
+              <Label htmlFor="problem-text" className="font-semibold flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" /> Textul Problemei
+              </Label>
+              <Textarea
+                id="problem-text"
+                placeholder="Scrie aici enunțul problemei..."
+                value={problemText}
+                onChange={handleTextChange}
+                className="h-40 resize-none" // Adjust height as needed
+              />
+            </div>
+
+            {/* Solution Image Upload */}
+            <div className="flex flex-col items-center space-y-2">
+              <Label htmlFor="solution-image" className="font-semibold flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-primary" /> Imagine Rezolvare
               </Label>
               <Input
-                id="problem-image"
+                id="solution-image"
                 type="file"
                 accept="image/*"
-                onChange={(e) => handleFileChange(e, setProblemImageFile, setProblemImagePreview)}
-                ref={problemInputRef}
+                onChange={(e) => handleFileChange(e, setSolutionImageFile, setSolutionImagePreview)}
+                ref={solutionInputRef}
                 className="hidden"
               />
-               <Button variant="outline" onClick={() => triggerFileInput(problemInputRef)} className="w-full max-w-xs">
-                 {problemImageFile ? 'Schimbă Imaginea' : 'Încarcă Imagine'}
+               <Button variant="outline" onClick={() => triggerFileInput(solutionInputRef)} className="w-full max-w-xs">
+                 {solutionImageFile ? 'Schimbă Imaginea' : 'Încarcă Imagine'}
                </Button>
-              {renderPreview(problemImagePreview, "Problemă + Rezolvare")}
+              {renderPreview(solutionImagePreview, "Rezolvare")}
+            </div>
           </div>
-          {/* Remove the results table upload section */}
+
 
           {error && (
             <Alert variant="destructive">
@@ -146,7 +177,7 @@ export default function PhysicsProblemSolverPage() {
 
           <Button
             onClick={handleSubmit}
-            disabled={isLoading || !problemImageFile} // Disable if no problem image
+            disabled={isLoading || !solutionImageFile || !problemText.trim()} // Disable if no solution image OR no problem text
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             {isLoading ? 'Se analizează...' : 'Analizează Problema'}
@@ -179,7 +210,7 @@ export default function PhysicsProblemSolverPage() {
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-calculator"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x1="16" y1="14" y2="18"/><line x1="16" x1="12" y1="14" y2="14"/><line x1="12" x1="12" y1="14" y2="18"/><line x1="12" x1="8" y1="14" y2="14"/><line x1="8" x1="8" y1="14" y2="18"/><line x1="8" x1="8" y1="10" y2="10"/></svg>
-                    Soluție Corectă
+                    Soluție Corectă (bazată pe textul problemei)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -189,7 +220,7 @@ export default function PhysicsProblemSolverPage() {
                <Card className="bg-secondary">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Lightbulb className="w-5 h-5 text-yellow-500" /> Analiză Erori & Feedback
+                    <Lightbulb className="w-5 h-5 text-yellow-500" /> Analiză Erori & Feedback (bazat pe imaginea rezolvării)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
