@@ -1,6 +1,8 @@
 'use server';
 
+// Import the updated types and function
 import { analyzePhysicsProblem, type AnalyzePhysicsProblemInput, type AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
+// Keep detectErrorAndProvideFeedback import in case it's used elsewhere, but it's not part of the main flow now.
 import { detectErrorAndProvideFeedback, type DetectErrorAndProvideFeedbackInput, type DetectErrorAndProvideFeedbackOutput } from '@/ai/flows/detect-error-and-provide-feedback';
 
 interface ActionResult<T> {
@@ -8,17 +10,17 @@ interface ActionResult<T> {
   error?: string;
 }
 
-// Although the request asked for detectErrorAndProvideFeedback,
-// analyzePhysicsProblem already includes error detection and feedback functionality.
-// We will use analyzePhysicsProblem as it covers the core requirement.
+// Updated action to use the new AnalyzePhysicsProblemInput type
 export async function handleAnalyzeProblem(input: AnalyzePhysicsProblemInput): Promise<ActionResult<AnalyzePhysicsProblemOutput>> {
   try {
+    // The input now only contains problemPhotoDataUri
     const result = await analyzePhysicsProblem(input);
     return { data: result };
   } catch (error) {
     console.error("Error in handleAnalyzeProblem:", error);
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during analysis.';
-    return { error: errorMessage };
+    // Respond with error in Romanian for consistency, although this is a system error
+    return { error: `A apărut o eroare la analiză: ${errorMessage}` };
   }
 }
 
@@ -31,6 +33,6 @@ export async function handleDetectError(input: DetectErrorAndProvideFeedbackInpu
     } catch (error) {
         console.error("Error in handleDetectError:", error);
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during error detection.';
-        return { error: errorMessage };
+        return { error: `A apărut o eroare la detectarea greșelilor: ${errorMessage}` };
     }
 }
