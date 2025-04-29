@@ -110,14 +110,3 @@ const analyzePhysicsProblemFlow = ai.defineFlow<
     return output!;
   }
 );
-
-```</content>
-  </change>
-  <change>
-    <file>src/ai/dev.ts</file>
-    <description>Update import statement to reflect the new flow version (analyze-physics-problem.ts).</description>
-    <content><![CDATA[
-import '@/ai/flows/analyze-physics-problem.ts'; // Keep this import, updated for V5 logic
-import '@/ai/flows/detect-error-and-provide-feedback.ts'; // Keep this import as well, even if unused
-
-```
