@@ -11,17 +11,18 @@ interface ActionResult<T> {
   error?: string;
 }
 
-// Action now uses the AnalyzePhysicsProblemInput which expects an array for solutionPhotoDataUris
+// Action now uses the updated AnalyzePhysicsProblemInput which includes optional problemPhotoDataUri
 export async function handleAnalyzeProblem(input: AnalyzePhysicsProblemInput): Promise<ActionResult<AnalyzePhysicsProblemOutput>> {
   try {
-    // The input now contains problemText and an array: solutionPhotoDataUris
-    if (!input.solutionPhotoDataUris || input.solutionPhotoDataUris.length === 0) {
-        return { error: 'Este necesară cel puțin o imagine cu soluția.' };
+    // Validate input based on the schema's logic (at least text or image for problem)
+    if (!input.problemText && !input.problemPhotoDataUri) {
+      return { error: 'Trebuie furnizat cel puțin textul problemei sau o imagine a problemei.' };
     }
-    if (!input.problemText || input.problemText.trim() === '') {
-       return { error: 'Textul problemei nu poate fi gol.' };
+    if (!input.solutionPhotoDataUris || input.solutionPhotoDataUris.length === 0) {
+      return { error: 'Este necesară cel puțin o imagine cu soluția.' };
     }
 
+    // Call the flow with the potentially updated input (problemText, problemPhotoDataUri, solutionPhotoDataUris)
     const result = await analyzePhysicsProblem(input);
     return { data: result };
   } catch (error) {
