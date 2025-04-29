@@ -322,7 +322,7 @@ export default function PhysicsProblemSolverPage() {
 
           {isLoading && (
              <div className="space-y-2 pt-4">
-                <Progress value={undefined} className="w-full animate-pulse" />
+                <Progress value={null} className="w-full animate-pulse" /> {/* Use null for indeterminate state */}
                  <p className="text-center text-sm text-muted-foreground">AI-ul analizează problema...</p>
              </div>
           )}
