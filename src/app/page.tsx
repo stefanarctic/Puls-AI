@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { ChangeEvent } from 'react';
@@ -10,11 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon, Trash2, FileImage } from 'lucide-react'; // Added FileImage, Trash2
+import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon, Trash2, FileImage, Wand2 } from 'lucide-react';
 import Image from 'next/image';
 import { handleAnalyzeProblem } from './actions';
 import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface SolutionImage {
   file: File;
@@ -23,14 +23,14 @@ interface SolutionImage {
 
 export default function PhysicsProblemSolverPage() {
   const [problemText, setProblemText] = useState<string>('');
-  const [problemImage, setProblemImage] = useState<SolutionImage | null>(null); // State for problem image
-  const [solutionImages, setSolutionImages] = useState<SolutionImage[]>([]); // State for multiple solution images
+  const [problemImage, setProblemImage] = useState<SolutionImage | null>(null);
+  const [solutionImages, setSolutionImages] = useState<SolutionImage[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalyzePhysicsProblemOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const problemInputRef = useRef<HTMLInputElement>(null); // Ref for problem image input
-  const solutionInputRef = useRef<HTMLInputElement>(null); // Ref for solution images input
+  const problemInputRef = useRef<HTMLInputElement>(null);
+  const solutionInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const handleProblemFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -152,7 +152,9 @@ export default function PhysicsProblemSolverPage() {
             description: result.error,
           })
       } else {
-        setAnalysisResult(result.data);
+        if (result.data) {
+          setAnalysisResult(result.data);
+        }
         // Optionally clear inputs after successful analysis
         // setProblemText('');
         // setProblemImage(null);
@@ -176,196 +178,192 @@ export default function PhysicsProblemSolverPage() {
     ref.current?.click();
   };
 
-   // Function to render preview for the single problem image
-   const renderProblemPreview = () => {
-      if (!problemImage) {
-          return null; // Don't show the placeholder if text area is also there
-      }
-      return (
-          <div className="mt-2 relative group aspect-video w-full max-w-md mx-auto"> {/* Centered preview */}
-              <Image src={problemImage.previewUrl} alt="Enunț problemă" layout="fill" className="rounded-md object-contain border" />
-              <Button
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={removeProblemImage}
-                  aria-label="Șterge imaginea problemei"
-              >
-                  <Trash2 className="h-4 w-4" />
-              </Button>
-          </div>
-      );
-  }
-
-  // Function to render previews for multiple solution images
-  const renderSolutionPreviews = () => {
-      if (solutionImages.length === 0) {
-          return <div className="mt-2 h-[100px] w-full flex items-center justify-center border rounded-md bg-secondary"><span className="text-muted-foreground text-sm">Nicio imagine cu soluția încărcată</span></div>;
-      }
-      return (
-          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {solutionImages.map((image, index) => (
-                  <div key={index} className="relative group aspect-square">
-                      <Image src={image.previewUrl} alt={`Rezolvare ${index + 1}`} layout="fill" className="rounded-md object-contain border" />
-                      <Button
-                          variant="destructive"
-                          size="icon"
-                          className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => removeSolutionImage(index)}
-                          aria-label="Șterge imaginea soluției"
-                      >
-                          <Trash2 className="h-4 w-4" />
-                      </Button>
-                  </div>
-              ))}
-          </div>
-      );
-  }
-
   return (
-    <div className="min-h-screen bg-secondary flex flex-col items-center justify-center p-4">
-      <Card className="w-full max-w-3xl shadow-lg">
+    <div className="container mx-auto py-8 px-4">
+      <Card className="max-w-4xl mx-auto">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold text-primary text-center">Analizator Probleme Fizică</CardTitle>
-          <CardDescription className="text-center text-muted-foreground">
-            Introdu textul SAU încarcă o imagine cu enunțul problemei. Apoi, încarcă una sau mai multe fotografii cu rezolvarea ta pentru a primi analiză și feedback AI în limba română.
+          <CardTitle className="text-2xl">Asistent Fizică</CardTitle>
+          <CardDescription>
+            Alege modul în care dorești să rezolvi problema de fizică
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Inputs Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent>
+          <Tabs defaultValue="analyze" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="analyze" className="flex items-center gap-2">
+                <Lightbulb className="w-4 h-4" /> Analizează Soluția
+              </TabsTrigger>
+              <TabsTrigger value="solve" className="flex items-center gap-2">
+                <Wand2 className="w-4 h-4" /> Rezolvă Direct
+              </TabsTrigger>
+            </TabsList>
 
-             {/* Problem Input Section */}
-             <div className="space-y-4">
-                {/* Problem Text Input */}
-                <div className="flex flex-col space-y-2">
-                  <Label htmlFor="problem-text" className="font-semibold flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-primary" /> Textul Problemei (Opțional)
-                  </Label>
-                  <Textarea
-                    id="problem-text"
-                    placeholder="Scrie aici enunțul problemei..."
-                    value={problemText}
-                    onChange={handleTextChange}
-                    className="h-32 resize-none"
-                    disabled={!!problemImage} // Disable if image is uploaded
-                  />
+            <TabsContent value="analyze">
+              <div className="grid grid-cols-2 gap-6">
+                {/* Left column - Problem Input */}
+                <div className="space-y-4">
+                  {/* Problem Text Input */}
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="problem-text" className="font-semibold flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-primary" /> Textul Problemei (Opțional)
+                    </Label>
+                    <Textarea
+                      id="problem-text"
+                      placeholder="Scrie aici enunțul problemei..."
+                      value={problemText}
+                      onChange={handleTextChange}
+                      className="h-32 resize-none"
+                      disabled={!!problemImage}
+                    />
+                  </div>
+
+                  <div className="text-center text-sm text-muted-foreground font-medium my-2">SAU</div>
+
+                  {/* Problem Image Upload */}
+                  <div className="space-y-2">
+                    <Label htmlFor="problem-image" className="font-semibold flex items-center gap-2">
+                      <FileImage className="w-4 h-4 text-primary" /> Imagine Problemă (Opțional)
+                    </Label>
+                    <Input
+                      id="problem-image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProblemFileChange}
+                      ref={problemInputRef}
+                      className="hidden"
+                      disabled={!!problemText.trim()}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => triggerFileInput(problemInputRef)}
+                      disabled={!!problemText.trim()}
+                      className="w-full"
+                    >
+                      <Upload className="mr-2 h-4 w-4" /> Încarcă Imagine Problemă
+                    </Button>
+                    {problemImage && (
+                      <div className="mt-4 relative">
+                        <img
+                          src={problemImage.previewUrl}
+                          alt="Previzualizare problemă"
+                          className="max-w-full h-auto rounded-lg border border-gray-200"
+                        />
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2"
+                          onClick={removeProblemImage}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="text-center text-sm text-muted-foreground font-medium my-2">SAU</div>
-
-                 {/* Problem Image Upload */}
-                <div className="flex flex-col space-y-2 items-center">
-                  <Label htmlFor="problem-image" className="font-semibold flex items-center gap-2">
-                     <FileImage className="w-4 h-4 text-primary" /> Imagine Problemă (Opțional)
+                {/* Right column - Solution Images */}
+                <div className="space-y-4">
+                  <Label htmlFor="solution-images" className="font-semibold flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-primary" /> Imagini cu Rezolvarea
                   </Label>
                   <Input
-                    id="problem-image"
+                    id="solution-images"
                     type="file"
                     accept="image/*"
-                    onChange={handleProblemFileChange}
-                    ref={problemInputRef}
+                    multiple
+                    onChange={handleSolutionFilesChange}
+                    ref={solutionInputRef}
                     className="hidden"
-                    disabled={!!problemText.trim()} // Disable if text is entered
                   />
                   <Button
                     variant="outline"
-                    onClick={() => triggerFileInput(problemInputRef)}
-                    disabled={!!problemText.trim()} // Disable if text is entered
-                    className="w-full max-w-xs"
-                   >
-                    <Upload className="mr-2 h-4 w-4" /> Încarcă Imagine Problemă
+                    onClick={() => triggerFileInput(solutionInputRef)}
+                    className="w-full"
+                  >
+                    <Upload className="mr-2 h-4 w-4" /> Încarcă Imagini Rezolvare
                   </Button>
-                  {/* Render problem preview */}
-                  {renderProblemPreview()}
+
+                  {/* Solution Images Preview */}
+                  <div className="grid grid-cols-1 gap-4 mt-4">
+                    {solutionImages.map((image, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={image.previewUrl}
+                          alt={`Soluție ${index + 1}`}
+                          className="w-full h-auto rounded-lg border border-gray-200"
+                        />
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2"
+                          onClick={() => removeSolutionImage(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-             </div>
+              </div>
 
-             {/* Solution Upload Section */}
-            <div className="flex flex-col space-y-2">
-              <Label htmlFor="solution-image" className="font-semibold flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-primary" /> Imagini Rezolvare ({solutionImages.length})*
-              </Label>
-              <Input
-                id="solution-image"
-                type="file"
-                accept="image/*"
-                multiple // Allow multiple file selection
-                onChange={handleSolutionFilesChange}
-                ref={solutionInputRef}
-                className="hidden"
+              {/* Analysis Button */}
+              <div className="mt-6 flex justify-center">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isLoading || (!problemText.trim() && !problemImage) || solutionImages.length === 0}
+                  className="w-full max-w-xs"
+                >
+                  {isLoading ? (
+                    <>
+                      <Progress value={33} className="w-full" />
+                      <span className="ml-2">Se analizează...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lightbulb className="mr-2 h-4 w-4" />
+                      Analizează Soluția
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Error Display */}
+              {error && (
+                <Alert variant="destructive" className="mt-4">
+                  <XCircle className="h-4 w-4" />
+                  <AlertTitle>Eroare</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {/* Analysis Result */}
+              {analysisResult && (
+                <div className="mt-6 space-y-4">
+                  <Alert>
+                    <CheckCircle className="h-4 w-4" />
+                    <AlertTitle>Rezultat Analiză</AlertTitle>
+                    <AlertDescription>
+                      <div className="space-y-2">
+                        <p><strong>Corectitudine:</strong> {analysisResult.correctness}</p>
+                        <p><strong>Explicație:</strong> {analysisResult.explanation}</p>
+                        {analysisResult.suggestions && (
+                          <p><strong>Sugestii:</strong> {analysisResult.suggestions}</p>
+                        )}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="solve">
+              <iframe
+                src="/solve"
+                className="w-full h-[800px] border-0"
+                title="Rezolvă Problema"
               />
-               <Button variant="outline" onClick={() => triggerFileInput(solutionInputRef)} className="w-full max-w-xs self-center">
-                 <Upload className="mr-2 h-4 w-4" /> Adaugă Imagini Soluție
-               </Button>
-               {/* Render solution previews */}
-               {renderSolutionPreviews()}
-            </div>
-          </div>
-
-
-          {error && (
-            <Alert variant="destructive" className="mt-4">
-              <XCircle className="h-4 w-4" />
-              <AlertTitle>Eroare</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <Button
-            onClick={handleSubmit}
-            disabled={isLoading || solutionImages.length === 0 || (!problemText.trim() && !problemImage) } // Disable if loading, no solution images, or no problem input (text or image)
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mt-4"
-          >
-            {isLoading ? 'Se analizează...' : 'Analizează Problema'}
-          </Button>
-
-          {isLoading && (
-             <div className="space-y-2 pt-4">
-                <Progress value={null} className="w-full animate-pulse" /> {/* Use null for indeterminate state */}
-                 <p className="text-center text-sm text-muted-foreground">AI-ul analizează problema...</p>
-             </div>
-          )}
-
-          {analysisResult && (
-            <div className="space-y-4 pt-6 border-t mt-6">
-              <h3 className="text-xl font-semibold text-primary flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-600" /> Analiză Completă
-              </h3>
-               {/* Display Rating */}
-              <Card className="bg-secondary border-yellow-500 border-2">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Star className="w-5 h-5 text-yellow-500" /> Punctaj
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <p className="text-lg font-semibold whitespace-pre-wrap">{analysisResult.rating}</p>
-                </CardContent>
-              </Card>
-              <Card className="bg-secondary">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-calculator"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x1="16" y1="14" y2="18"/><line x1="16" x1="12" y1="14" y2="14"/><line x1="12" x1="12" y1="14" y2="18"/><line x1="12" x1="8" y1="14" y2="14"/><line x1="8" x1="8" y1="14" y2="18"/><line x1="8" x1="8" y1="10" y2="10"/></svg>
-                    Soluție Corectă (bazată pe enunțul problemei)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm whitespace-pre-wrap">{analysisResult.solution}</p>
-                </CardContent>
-              </Card>
-               <Card className="bg-secondary">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Lightbulb className="w-5 h-5 text-yellow-500" /> Analiză Erori & Feedback (bazat pe imaginile soluției)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <p className="text-sm whitespace-pre-wrap">{analysisResult.errorAnalysis}</p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>
