@@ -7,7 +7,8 @@
  * - SolvePhysicsProblemOutput - The return type for the solvePhysicsProblem function.
  */
 
-import {ai} from '@/ai/ai-instance';
+import {runThrottled} from '@/ai/request-throttle';
+import {groqChat, type GroqChatMessage} from '@/ai/groq';
 import {z} from 'genkit';
 
 // Input schema
@@ -33,51 +34,45 @@ const SolvePhysicsProblemOutputSchema = z.object({
 
 export type SolvePhysicsProblemOutput = z.infer<typeof SolvePhysicsProblemOutputSchema>;
 
-const prompt = ai.definePrompt({
-  name: 'solvePhysicsProblemPromptRomanian',
-  input: {
-    schema: z.object({
-      problemText: z.string().optional().describe('Textul problemei de fizică.'),
-      problemPhotoDataUri: z.string().optional().describe(
-        "O fotografie a enunțului problemei, ca data URI. Format așteptat: 'data:<mimetype>;base64,<encoded_data>'."
-      ),
-    }),
-  },
-  output: {
-    schema: SolvePhysicsProblemOutputSchema,
-  },
-  prompt: `Ești un expert în rezolvarea problemelor de fizică. Analizează problema de fizică descrisă mai jos (fie prin text, fie prin imagine, fie ambele) și oferă o soluție detaliată.
+const SYSTEM_PROMPT = `Ești un expert în rezolvarea problemelor de fizică. Răspunde exclusiv în limba română și oferă: 1) Soluția detaliată, 2) Explicații pe pași, 3) Formule folosite, 4) Răspuns final cu unități.`;
 
-{{#if problemText}}
-Textul Problemei:
-{{{problemText}}}
-{{/if}}
+async function callGroqSolve(input: SolvePhysicsProblemInput): Promise<SolvePhysicsProblemOutput> {
+  const messages: GroqChatMessage[] = [
+    { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT }] },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: `Textul Problemei:${input.problemText ? `\n${input.problemText}` : ' (nedatat)'}` },
+        ...(input.problemPhotoDataUri ? [{ type: 'image_url', image_url: { url: input.problemPhotoDataUri } }] as const : []),
+        { type: 'text', text: 'Returnează un JSON cu cheile: solution, explanation, formulas, finalAnswer.' },
+      ],
+    },
+  ];
 
-{{#if problemPhotoDataUri}}
-Imaginea Problemei:
-{{media url=problemPhotoDataUri}}
-{{/if}}
+  const content = await runThrottled(() => groqChat(messages, { max_tokens: 2000 }));
 
-Răspunde exclusiv în limba română și oferă următoarele informații:
-1. **Soluția detaliată:** Prezintă pașii detaliați ai rezolvării, cu explicații pentru fiecare pas.
-2. **Explicații:** Oferă explicații clare pentru fiecare pas al rezolvării, inclusiv de ce se folosesc anumite formule sau metode.
-3. **Formule:** Listează toate formulele folosite în rezolvare, cu explicații despre când și de ce se folosesc.
-4. **Răspuns final:** Prezintă răspunsul final al problemei, cu unitățile de măsură corecte.`,
-});
+  let solution = '';
+  let explanation = '';
+  let formulas: string[] = [];
+  let finalAnswer = '';
+  try {
+    const match = content.match(/\{[\s\S]*\}$/);
+    const json = JSON.parse(match ? match[0] : content);
+    solution = String(json.solution ?? '');
+    explanation = String(json.explanation ?? '');
+    finalAnswer = String(json.finalAnswer ?? '');
+    const f = json.formulas;
+    formulas = Array.isArray(f) ? f.map((s: unknown) => String(s)) : [];
+  } catch {
+    solution = content;
+    explanation = 'Explicațiile sunt incluse în textul de mai sus.';
+    finalAnswer = '';
+    formulas = [];
+  }
 
-const solvePhysicsProblemFlow = ai.defineFlow<
-  typeof SolvePhysicsProblemInputSchema,
-  typeof SolvePhysicsProblemOutputSchema
->({
-  name: 'solvePhysicsProblemFlow',
-  inputSchema: SolvePhysicsProblemInputSchema,
-  outputSchema: SolvePhysicsProblemOutputSchema,
-},
-async input => {
-  const {output} = await prompt(input);
-  return output!;
-});
+  return { solution, explanation, formulas, finalAnswer };
+}
 
 export async function solvePhysicsProblem(input: SolvePhysicsProblemInput): Promise<SolvePhysicsProblemOutput> {
-  return solvePhysicsProblemFlow(input);
-} 
+  return callGroqSolve(input);
+}

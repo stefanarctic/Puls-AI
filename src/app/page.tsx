@@ -15,6 +15,7 @@ import { handleAnalyzeProblem } from './actions';
 import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import DropZone from "@/components/ui/drop-zone";
 
 interface SolutionImage {
   file: File;
@@ -233,14 +234,24 @@ export default function PhysicsProblemSolverPage() {
                       className="hidden"
                       disabled={!!problemText.trim()}
                     />
-                    <Button
-                      variant="outline"
-                      onClick={() => triggerFileInput(problemInputRef)}
+                    <DropZone
+                      accept="image/*"
+                      multiple={false}
                       disabled={!!problemText.trim()}
+                      onFiles={(files) => {
+                        const fileList = Array.isArray(files) ? files : Array.from(files)
+                        if (fileList.length > 0) {
+                          const fakeEvent = { target: { files: [fileList[0]] } } as unknown as ChangeEvent<HTMLInputElement>
+                          handleProblemFileChange(fakeEvent)
+                        }
+                      }}
                       className="w-full"
                     >
-                      <Upload className="mr-2 h-4 w-4" /> Încarcă Imagine Problemă
-                    </Button>
+                      <div className="flex flex-col items-center gap-2 w-full">
+                        <Upload className="h-4 w-4" />
+                        <span className="text-sm">Trage o imagine a problemei sau fă click</span>
+                      </div>
+                    </DropZone>
                     {problemImage && (
                       <div className="mt-4 relative">
                         <img
@@ -275,13 +286,24 @@ export default function PhysicsProblemSolverPage() {
                     ref={solutionInputRef}
                     className="hidden"
                   />
-                  <Button
-                    variant="outline"
-                    onClick={() => triggerFileInput(solutionInputRef)}
+                  <DropZone
+                    accept="image/*"
+                    multiple
+                    onFiles={(files) => {
+                      const fileList = Array.isArray(files) ? files : Array.from(files)
+                      const dt = new DataTransfer()
+                      fileList.forEach(f => dt.items.add(f))
+                      const fakeInput = document.createElement('input')
+                      const fakeEvent = { target: { files: dt.files } } as unknown as ChangeEvent<HTMLInputElement>
+                      handleSolutionFilesChange(fakeEvent)
+                    }}
                     className="w-full"
                   >
-                    <Upload className="mr-2 h-4 w-4" /> Încarcă Imagini Rezolvare
-                  </Button>
+                    <div className="flex flex-col items-center gap-2 w-full">
+                      <Upload className="h-4 w-4" />
+                      <span className="text-sm">Trage imaginile soluției sau fă click</span>
+                    </div>
+                  </DropZone>
 
                   {/* Solution Images Preview */}
                   <div className="grid grid-cols-1 gap-4 mt-4">
@@ -344,11 +366,9 @@ export default function PhysicsProblemSolverPage() {
                     <AlertTitle>Rezultat Analiză</AlertTitle>
                     <AlertDescription>
                       <div className="space-y-2">
-                        <p><strong>Corectitudine:</strong> {analysisResult.correctness}</p>
-                        <p><strong>Explicație:</strong> {analysisResult.explanation}</p>
-                        {analysisResult.suggestions && (
-                          <p><strong>Sugestii:</strong> {analysisResult.suggestions}</p>
-                        )}
+                        <p><strong>Soluție corectă:</strong> {analysisResult.solution}</p>
+                        <p><strong>Analiza erorilor:</strong> {analysisResult.errorAnalysis}</p>
+                        <p><strong>Punctaj:</strong> {analysisResult.rating}</p>
                       </div>
                     </AlertDescription>
                   </Alert>

@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import DropZone from "@/components/ui/drop-zone";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -160,14 +161,24 @@ export default function SolvePhysicsProblemPage() {
                   className="hidden"
                   disabled={!!problemText.trim()}
                 />
-                <Button
-                  variant="outline"
-                  onClick={() => triggerFileInput(problemInputRef)}
+                <DropZone
+                  accept="image/*"
+                  multiple={false}
                   disabled={!!problemText.trim()}
-                  className="w-full max-w-xs"
+                  onFiles={(files) => {
+                    const fileList = Array.isArray(files) ? files : Array.from(files)
+                    if (fileList.length > 0) {
+                      const fakeEvent = { target: { files: [fileList[0]] } } as unknown as React.ChangeEvent<HTMLInputElement>
+                      handleProblemFileChange(fakeEvent)
+                    }
+                  }}
+                  className="w-full"
                 >
-                  <Upload className="mr-2 h-4 w-4" /> Încarcă Imagine Problemă
-                </Button>
+                  <div className="flex flex-col items-center gap-2 w-full">
+                    <Upload className="h-4 w-4" />
+                    <span className="text-sm">Trage o imagine a problemei sau fă click</span>
+                  </div>
+                </DropZone>
                 {problemImage && (
                   <div className="mt-4 relative">
                     <img
