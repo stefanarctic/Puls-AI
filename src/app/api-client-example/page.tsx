@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon, Trash2, FileImage } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon, Trash2, FileImage, Calculator } from 'lucide-react';
 import NextImage from 'next/image'; // Renamed to avoid conflict with ImageIcon
 import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
 import { useToast } from "@/hooks/use-toast";
@@ -168,7 +168,7 @@ export default function ApiClientExamplePage() {
                 </Button>
                 {problemImageFile && (
                   <div className="mt-2 relative group aspect-video w-full max-w-xs mx-auto">
-                    <NextImage src={problemImageFile.previewUrl} alt="Previzualizare problemă" layout="fill" className="rounded-md object-contain border" />
+                    <NextImage src={problemImageFile.previewUrl} alt="Previzualizare problemă" fill className="rounded-md object-contain border" />
                     <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={removeProblemImage}><Trash2 /></Button>
                   </div>
                 )}
@@ -186,7 +186,7 @@ export default function ApiClientExamplePage() {
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {solutionImageFiles.map((img, index) => (
                     <div key={index} className="relative group aspect-square">
-                      <NextImage src={img.previewUrl} alt={`Soluție ${index + 1}`} layout="fill" className="rounded-md object-contain border" />
+                      <NextImage src={img.previewUrl} alt={`Soluție ${index + 1}`} fill className="rounded-md object-contain border" />
                       <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => removeSolutionImage(index)}><Trash2 /></Button>
                     </div>
                   ))}
@@ -226,7 +226,7 @@ export default function ApiClientExamplePage() {
                 <CardContent><p className="text-lg font-semibold whitespace-pre-wrap">{apiResponse.rating}</p></CardContent>
               </Card>
               <Card className="bg-secondary">
-                <CardHeader><CardTitle className="text-lg flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-calculator"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x1="16" y1="14" y2="18"/><line x1="16" x1="12" y1="14" y2="14"/><line x1="12" x1="12" y1="14" y2="18"/><line x1="12" x1="8" y1="14" y2="14"/><line x1="8" x1="8" y1="14" y2="18"/><line x1="8" x1="8" y1="10" y2="10"/></svg> Soluție Corectă</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Calculator className="w-5 h-5" /> Soluție Corectă</CardTitle></CardHeader>
                 <CardContent><p className="text-sm whitespace-pre-wrap">{apiResponse.solution}</p></CardContent>
               </Card>
               <Card className="bg-secondary">

@@ -44,7 +44,7 @@ export async function analyzePhysicsProblem(input: AnalyzePhysicsProblemInput): 
   return callGroqAnalyze(input);
 }
 
-const SYSTEM_PROMPT = `Ești un expert în rezolvarea problemelor de fizică și un evaluator corect și flexibil. Analizează problema (text și/sau imagine) și soluția utilizatorului din imagini. Aplică toleranță rezonabilă la aproximări numerice. Răspunde exclusiv în limba română și furnizează: 1) Soluția corectă, 2) Analiza erorilor, 3) Punctaj "X/10 puncte".`;
+const SYSTEM_PROMPT = `Ești un expert în rezolvarea problemelor de fizică și un evaluator corect și flexibil. Analizează problema (text și/sau imagine) și soluția utilizatorului din imagini. Aplică toleranță rezonabilă la aproximări numerice. Răspunde exclusiv în limba română și furnizează: 1) Soluția corectă, 2) Analiza erorilor, 3) Punctaj "X/10 puncte". Foloseste un limbaj care sa nu faca referinta la tine ca si cum ai fi un AI. Nu mai zice ca voi selecta, zi vom selecta, si in celelalte cazuri la fel.`;
 
 async function callGroqAnalyze(input: AnalyzePhysicsProblemInput): Promise<AnalyzePhysicsProblemOutput> {
   const messages: GroqChatMessage[] = [

@@ -34,7 +34,7 @@ const SolvePhysicsProblemOutputSchema = z.object({
 
 export type SolvePhysicsProblemOutput = z.infer<typeof SolvePhysicsProblemOutputSchema>;
 
-const SYSTEM_PROMPT = `Ești un expert în rezolvarea problemelor de fizică. Răspunde exclusiv în limba română și oferă: 1) Soluția detaliată, 2) Explicații pe pași, 3) Formule folosite, 4) Răspuns final cu unități.`;
+const SYSTEM_PROMPT = `Ești un expert în rezolvarea problemelor de fizică. Răspunde exclusiv în limba română și oferă: 1) Soluția detaliată, 2) Explicații pe pași, 3) Formule folosite, 4) Răspuns final cu unități. Foloseste un limbaj care sa nu faca referinta la tine ca si cum ai fi un AI. Nu mai zice ca voi selecta, zi vom selecta, si in celelalte cazuri la fel.`;
 
 async function callGroqSolve(input: SolvePhysicsProblemInput): Promise<SolvePhysicsProblemOutput> {
   const messages: GroqChatMessage[] = [
@@ -56,8 +56,41 @@ async function callGroqSolve(input: SolvePhysicsProblemInput): Promise<SolvePhys
   let formulas: string[] = [];
   let finalAnswer = '';
   try {
-    const match = content.match(/\{[\s\S]*\}$/);
-    const json = JSON.parse(match ? match[0] : content);
+    // Try multiple strategies to robustly extract JSON from LLM output
+    const tryParsers: Array<() => unknown> = [
+      // 1) ```json ... ``` fenced block
+      () => {
+        const fenced = content.match(/```json\s*([\s\S]*?)\s*```/i);
+        return fenced ? JSON.parse(fenced[1]) : undefined;
+      },
+      // 2) Any fenced block without language
+      () => {
+        const fenced = content.match(/```\s*([\s\S]*?)\s*```/);
+        return fenced ? JSON.parse(fenced[1]) : undefined;
+      },
+      // 3) First {...} block (greedy enough to include nested braces)
+      () => {
+        const brace = content.match(/\{[\s\S]*?\}/);
+        return brace ? JSON.parse(brace[0]) : undefined;
+      },
+      // 4) Raw content (last resort)
+      () => JSON.parse(content),
+    ];
+
+    let parsed: any | undefined;
+    for (const parse of tryParsers) {
+      try {
+        const res = parse();
+        if (res && typeof res === 'object') {
+          parsed = res;
+          break;
+        }
+      } catch {
+        // Try next strategy
+      }
+    }
+
+    const json = parsed ?? {};
     solution = String(json.solution ?? '');
     explanation = String(json.explanation ?? '');
     finalAnswer = String(json.finalAnswer ?? '');

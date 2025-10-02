@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import Markdown from "@/components/ui/markdown";
 import { Upload, CheckCircle, XCircle, FileText, FileImage, Trash2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import type { SolvePhysicsProblemOutput } from '@/ai/flows/solve-physics-problem';
@@ -235,23 +236,27 @@ export default function SolvePhysicsProblemPage() {
                   <CardContent className="space-y-4">
                     <div>
                       <h3 className="font-semibold mb-2">Pașii Rezolvării:</h3>
-                      <p className="whitespace-pre-wrap">{solutionResult.solution}</p>
+                      <Markdown className="prose max-w-none">{solutionResult.solution}</Markdown>
                     </div>
                     <div>
                       <h3 className="font-semibold mb-2">Explicații:</h3>
-                      <p className="whitespace-pre-wrap">{solutionResult.explanation}</p>
+                      <Markdown className="prose max-w-none">{solutionResult.explanation}</Markdown>
                     </div>
                     <div>
                       <h3 className="font-semibold mb-2">Formule Folosite:</h3>
                       <ul className="list-disc pl-5 space-y-2">
                         {solutionResult.formulas.map((formula, index) => (
-                          <li key={index}>{formula}</li>
+                          <li key={index} className="space-y-1">
+                            <Markdown className="prose max-w-none">{formula}</Markdown>
+                          </li>
                         ))}
                       </ul>
                     </div>
                     <div>
                       <h3 className="font-semibold mb-2">Răspuns Final:</h3>
-                      <p className="text-lg font-medium">{solutionResult.finalAnswer}</p>
+                      <div className="text-lg font-medium">
+                        <Markdown className="prose max-w-none">{solutionResult.finalAnswer}</Markdown>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
