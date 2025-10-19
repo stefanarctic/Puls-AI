@@ -26,12 +26,15 @@ export default function PhysicsProblemSolverPage() {
   const [problemText, setProblemText] = useState<string>('');
   const [problemImage, setProblemImage] = useState<SolutionImage | null>(null);
   const [solutionImages, setSolutionImages] = useState<SolutionImage[]>([]);
+  const [additionalContext, setAdditionalContext] = useState<string>('');
   const [analysisResult, setAnalysisResult] = useState<AnalyzePhysicsProblemOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const problemInputRef = useRef<HTMLInputElement>(null);
   const solutionInputRef = useRef<HTMLInputElement>(null);
+  const solveButtonRef = useRef<HTMLButtonElement>(null);
+  const analysisResultRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const handleProblemFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -41,6 +44,10 @@ export default function PhysicsProblemSolverPage() {
       reader.onloadend = () => {
         setProblemImage({ file, previewUrl: reader.result as string });
         setError(null); // Clear error when new file is added
+        // Scroll to solve button after image is uploaded
+        setTimeout(() => {
+          solveButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
       };
       reader.onerror = (err) => {
         console.error("Error reading problem file:", err);
@@ -102,6 +109,11 @@ export default function PhysicsProblemSolverPage() {
       setError(null); // Clear error when text changes
   }
 
+  const handleContextChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setAdditionalContext(e.target.value);
+      setError(null); // Clear error when context changes
+  }
+
   const removeProblemImage = () => {
     setProblemImage(null);
   };
@@ -138,11 +150,12 @@ export default function PhysicsProblemSolverPage() {
     try {
       const solutionPhotoDataUris = solutionImages.map(img => img.previewUrl); // Get array of data URIs
 
-      // Pass problem text, optional problem image URI, and solution photo URIs to the action
+      // Pass problem text, optional problem image URI, solution photo URIs, and additional context to the action
       const result = await handleAnalyzeProblem({
         problemText: problemText.trim() || undefined, // Send undefined if empty
         problemPhotoDataUri: problemImage?.previewUrl, // Send undefined if null
         solutionPhotoDataUris, // Pass the array
+        additionalContext: additionalContext.trim() || undefined, // Send undefined if empty
       });
 
       if (result.error) {
@@ -155,6 +168,10 @@ export default function PhysicsProblemSolverPage() {
       } else {
         if (result.data) {
           setAnalysisResult(result.data);
+          // Scroll to analysis result after it's displayed
+          setTimeout(() => {
+            analysisResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 100);
         }
         // Optionally clear inputs after successful analysis
         // setProblemText('');
@@ -270,6 +287,20 @@ export default function PhysicsProblemSolverPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Additional Context Input */}
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="additional-context" className="font-semibold flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-primary" /> Context Adițional (Opțional)
+                    </Label>
+                    <Textarea
+                      id="additional-context"
+                      placeholder="Adaugă informații suplimentare pentru AI (ex: nivel de dificultate, concepte specifice de verificat, etc.)"
+                      value={additionalContext}
+                      onChange={handleContextChange}
+                      className="h-20 resize-none"
+                    />
+                  </div>
                 </div>
 
                 {/* Right column - Solution Images */}
@@ -331,6 +362,7 @@ export default function PhysicsProblemSolverPage() {
               {/* Analysis Button */}
               <div className="mt-6 flex justify-center">
                 <Button
+                  ref={solveButtonRef}
                   onClick={handleSubmit}
                   disabled={isLoading || (!problemText.trim() && !problemImage) || solutionImages.length === 0}
                   className="w-full max-w-xs"
@@ -360,7 +392,7 @@ export default function PhysicsProblemSolverPage() {
 
               {/* Analysis Result */}
               {analysisResult && (
-                <div className="mt-6 space-y-4">
+                <div ref={analysisResultRef} className="mt-6 space-y-4">
                   <Alert>
                     <CheckCircle className="h-4 w-4" />
                     <AlertTitle>Rezultat Analiză</AlertTitle>

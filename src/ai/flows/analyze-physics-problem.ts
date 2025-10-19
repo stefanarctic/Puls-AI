@@ -12,7 +12,7 @@ import {runThrottled} from '@/ai/request-throttle';
 import {groqChat, type GroqChatMessage} from '@/ai/groq';
 import {z} from 'genkit';
 
-// Input schema remains the same
+// Input schema with additional context field
 const AnalyzePhysicsProblemInputSchema = z.object({
   problemText: z.string().optional().describe('Textul problemei de fizică (opțional dacă se furnizează imaginea problemei).'),
   problemPhotoDataUri: z.string().optional().describe(
@@ -24,6 +24,7 @@ const AnalyzePhysicsProblemInputSchema = z.object({
       )
     ).min(1, { message: "Este necesară cel puțin o imagine cu soluția." }) // Ensure at least one solution image
      .describe('O listă (array) cu imaginile soluției utilizatorului, sub formă de data URI.'),
+  additionalContext: z.string().optional().describe('Context adițional sau instrucțiuni specifice pentru analiză (opțional).'),
 }).refine(data => data.problemText || data.problemPhotoDataUri, {
     message: "Trebuie furnizat cel puțin textul problemei sau o imagine a problemei.",
     path: ["problemText", "problemPhotoDataUri"], // Indicate which fields are related to the error
@@ -54,6 +55,7 @@ async function callGroqAnalyze(input: AnalyzePhysicsProblemInput): Promise<Analy
       content: [
         { type: 'text', text: `Textul Problemei:${input.problemText ? `\n${input.problemText}` : ' (nedatat)'}` },
         ...(input.problemPhotoDataUri ? [{ type: 'image_url', image_url: { url: input.problemPhotoDataUri } }] as const : []),
+        ...(input.additionalContext ? [{ type: 'text', text: `Context Adițional: ${input.additionalContext}` }] as const : []),
         { type: 'text', text: 'Imagini cu Soluția Utilizatorului (urmează una sau mai multe):' },
         ...((input.solutionPhotoDataUris ?? []).map(url => ({ type: 'image_url', image_url: { url } }) as const)),
         { type: 'text', text: 'Returnează un JSON cu cheile: solution, errorAnalysis, rating.' },

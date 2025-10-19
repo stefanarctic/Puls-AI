@@ -49,13 +49,29 @@ export async function handleDetectError(input: DetectErrorAndProvideFeedbackInpu
 
 export async function handleSolveProblem(input: SolvePhysicsProblemInput): Promise<ActionResult<SolvePhysicsProblemOutput>> {
   try {
+    console.log('handleSolveProblem called with input:', {
+      hasText: !!input.problemText,
+      hasImage: !!input.problemPhotoDataUri,
+      hasContext: !!input.additionalContext,
+      contextContent: input.additionalContext
+    });
+
     // Validate input based on the schema's logic (at least text or image for problem)
     if (!input.problemText && !input.problemPhotoDataUri) {
       return { error: 'Trebuie furnizat cel puțin textul problemei sau o imagine a problemei.' };
     }
 
     // Call the flow with the input
+    console.log('Calling solvePhysicsProblem...');
     const result = await solvePhysicsProblem(input);
+    console.log('solvePhysicsProblem result:', {
+      hasSolution: !!result.solution,
+      hasExplanation: !!result.explanation,
+      hasFormulas: result.formulas?.length > 0,
+      hasFinalAnswer: !!result.finalAnswer,
+      solutionLength: result.solution?.length || 0
+    });
+    
     return { data: result };
   } catch (error) {
     console.error("Error in handleSolveProblem:", error);

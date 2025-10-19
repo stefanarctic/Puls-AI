@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
       const result = await handleSolveProblem({
         problemText: body.problemText,
         problemPhotoDataUri: body.problemPhotoDataUri,
+        additionalContext: body.additionalContext,
       });
 
       if (result.error) {

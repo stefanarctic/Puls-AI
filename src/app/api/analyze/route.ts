@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
         problemText: body.problemText,
         problemPhotoDataUri: body.problemPhotoDataUri,
         solutionPhotoDataUris: body.solutionPhotoDataUris,
+        additionalContext: body.additionalContext,
       });
 
       if (result.error) {

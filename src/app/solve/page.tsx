@@ -22,11 +22,14 @@ interface SolutionImage {
 export default function SolvePhysicsProblemPage() {
   const [problemText, setProblemText] = useState<string>('');
   const [problemImage, setProblemImage] = useState<SolutionImage | null>(null);
+  const [additionalContext, setAdditionalContext] = useState<string>('');
   const [solutionResult, setSolutionResult] = useState<SolvePhysicsProblemOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const problemInputRef = useRef<HTMLInputElement>(null);
+  const solveButtonRef = useRef<HTMLButtonElement>(null);
+  const solutionResultRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const handleProblemFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,6 +39,10 @@ export default function SolvePhysicsProblemPage() {
       reader.onloadend = () => {
         setProblemImage({ file, previewUrl: reader.result as string });
         setError(null);
+        // Scroll to solve button after image is uploaded
+        setTimeout(() => {
+          solveButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
       };
       reader.onerror = (err) => {
         console.error("Error reading problem file:", err);
@@ -55,6 +62,11 @@ export default function SolvePhysicsProblemPage() {
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setProblemText(e.target.value);
+    setError(null);
+  };
+
+  const handleContextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setAdditionalContext(e.target.value);
     setError(null);
   };
 
@@ -90,6 +102,7 @@ export default function SolvePhysicsProblemPage() {
         body: JSON.stringify({
           problemText: problemText.trim() || undefined,
           problemPhotoDataUri: problemImage?.previewUrl,
+          additionalContext: additionalContext.trim() || undefined,
         }),
       });
 
@@ -100,6 +113,10 @@ export default function SolvePhysicsProblemPage() {
       }
 
       setSolutionResult(result);
+      // Scroll to solution result after it's displayed
+      setTimeout(() => {
+        solutionResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
       toast({
         title: "Succes",
         description: "Problema a fost rezolvată cu succes.",
@@ -198,6 +215,23 @@ export default function SolvePhysicsProblemPage() {
                   </div>
                 )}
               </div>
+
+              {/* Additional Context Input */}
+              <div className="flex flex-col space-y-2">
+                <Label htmlFor="additional-context" className="font-semibold flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary" /> Context Adițional / Exercițiul Dorit (Opțional)
+                </Label>
+                <Textarea
+                  id="additional-context"
+                  placeholder="Specifică care exercițiu vrei rezolvat dacă sunt mai multe în imagine (ex: 'exercițiul 1', 'exercițiul din stânga', 'problema de la punctul a)'). Poți adăuga și alte informații: nivel de dificultate, metoda preferată, etc."
+                  value={additionalContext}
+                  onChange={handleContextChange}
+                  className="h-24 resize-none"
+                />
+                <div className="text-sm text-muted-foreground bg-blue-50 p-2 rounded border border-blue-200">
+                  💡 <strong>Sfat:</strong> Dacă încarci o imagine cu mai multe exerciții, specifică aici care exercițiu vrei rezolvat pentru a primi o soluție precisă.
+                </div>
+              </div>
             </div>
 
             {error && (
@@ -209,6 +243,7 @@ export default function SolvePhysicsProblemPage() {
             )}
 
             <Button
+              ref={solveButtonRef}
               onClick={handleSubmit}
               disabled={isLoading || (!problemText.trim() && !problemImage)}
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
@@ -226,38 +261,97 @@ export default function SolvePhysicsProblemPage() {
             )}
 
             {solutionResult && (
-              <div className="space-y-6 mt-6 border-t pt-6">
+              <div ref={solutionResultRef} className="space-y-6 mt-6 border-t pt-6">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-xl flex items-center gap-2">
                       <CheckCircle className="w-5 h-5 text-green-600" /> Soluție
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <h3 className="font-semibold mb-2">Pașii Rezolvării:</h3>
-                      <Markdown className="prose max-w-none">{solutionResult.solution}</Markdown>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold mb-2">Explicații:</h3>
-                      <Markdown className="prose max-w-none">{solutionResult.explanation}</Markdown>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold mb-2">Formule Folosite:</h3>
-                      <ul className="list-disc pl-5 space-y-2">
-                        {solutionResult.formulas.map((formula, index) => (
-                          <li key={index} className="space-y-1">
-                            <Markdown className="prose max-w-none">{formula}</Markdown>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold mb-2">Răspuns Final:</h3>
-                      <div className="text-lg font-medium">
-                        <Markdown className="prose max-w-none">{solutionResult.finalAnswer}</Markdown>
+                  <CardContent className="space-y-6">
+                    {solutionResult.solution && (
+                      <div className={`p-4 rounded-lg border ${
+                        solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') || 
+                        solutionResult.solution.toLowerCase().includes('te rog specifică') ||
+                        solutionResult.solution.toLowerCase().includes('nu este clar')
+                          ? 'bg-orange-50 border-orange-200' 
+                          : 'bg-blue-50 border-blue-200'
+                      }`}>
+                        <h3 className={`font-semibold mb-3 flex items-center gap-2 ${
+                          solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') || 
+                          solutionResult.solution.toLowerCase().includes('te rog specifică') ||
+                          solutionResult.solution.toLowerCase().includes('nu este clar')
+                            ? 'text-orange-800' 
+                            : 'text-blue-800'
+                        }`}>
+                          {solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') || 
+                           solutionResult.solution.toLowerCase().includes('te rog specifică') ||
+                           solutionResult.solution.toLowerCase().includes('nu este clar')
+                            ? '❓ Clarificare Necesară:' 
+                            : '📋 Pașii Rezolvării:'
+                          }
+                        </h3>
+                        <div className={`prose max-w-none ${
+                          solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') || 
+                          solutionResult.solution.toLowerCase().includes('te rog specifică') ||
+                          solutionResult.solution.toLowerCase().includes('nu este clar')
+                            ? 'text-orange-900' 
+                            : 'text-blue-900'
+                        }`}>
+                          <Markdown>{solutionResult.solution}</Markdown>
+                        </div>
+                        {(solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') || 
+                          solutionResult.solution.toLowerCase().includes('te rog specifică') ||
+                          solutionResult.solution.toLowerCase().includes('nu este clar')) && (
+                          <div className="mt-3 p-3 bg-orange-100 rounded border border-orange-300">
+                            <p className="text-sm text-orange-800 font-medium">
+                              💡 Pentru a continua, te rog să specifici în câmpul "Context Adițional" care exercițiu vrei rezolvat, apoi apasă din nou "Rezolvă Problema".
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    )}
+                    
+                    {solutionResult.explanation && (
+                      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h3 className="font-semibold mb-3 text-green-800 flex items-center gap-2">
+                          💡 Explicații Detaliate:
+                        </h3>
+                        <div className="prose max-w-none text-green-900">
+                          <Markdown>{solutionResult.explanation}</Markdown>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {solutionResult.formulas && solutionResult.formulas.length > 0 && (
+                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <h3 className="font-semibold mb-3 text-purple-800 flex items-center gap-2">
+                          🧮 Formule Folosite:
+                        </h3>
+                        <div className="space-y-3">
+                          {solutionResult.formulas.map((formula, index) => (
+                            <div key={index} className="bg-white p-3 rounded border border-purple-100">
+                              <div className="prose max-w-none text-purple-900">
+                                <Markdown>{formula}</Markdown>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {solutionResult.finalAnswer && (
+                      <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                        <h3 className="font-semibold mb-3 text-yellow-800 flex items-center gap-2">
+                          🎯 Răspuns Final:
+                        </h3>
+                        <div className="bg-white p-4 rounded border border-yellow-100">
+                          <div className="text-lg font-medium prose max-w-none text-yellow-900">
+                            <Markdown>{solutionResult.finalAnswer}</Markdown>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
