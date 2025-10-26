@@ -171,12 +171,27 @@ async function callGroqSolve(input: SolvePhysicsProblemInput): Promise<SolvePhys
       }
     };
 
-    solution = String(json.solution ?? '');
-    explanation = String(json.explanation ?? '');
+    // Helper to safely convert any value to string (handles objects properly)
+    const safeToString = (value: unknown): string => {
+      try {
+        if (value == null || value === undefined) return '';
+        if (typeof value === 'string') return value;
+        if (typeof value === 'object') {
+          // For objects, try to create a readable string representation
+          return JSON.stringify(value, null, 2);
+        }
+        return String(value);
+      } catch {
+        return String(value ?? '');
+      }
+    };
+
+    solution = safeToString(json.solution ?? '');
+    explanation = safeToString(json.explanation ?? '');
     finalAnswer = normalizeFinalAnswer(json.finalAnswer);
     
     const f = json.formulas;
-    formulas = Array.isArray(f) ? f.map((s: unknown) => String(s)) : [];
+    formulas = Array.isArray(f) ? f.map((s: unknown) => safeToString(s)) : [];
   } catch (error) {
     console.log('JSON parsing failed, using raw content:', error);
     solution = content || 'Conținut indisponibil';

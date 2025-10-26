@@ -62,22 +62,27 @@ export async function groqChat(
 
   const payloadMessages = isVisionModel ? (messagesForVision as any) : (messagesForTextOnly as any);
 
+  const requestBody = {
+    model,
+    temperature: options?.temperature ?? 0.2,
+    max_tokens: options?.max_tokens ?? 2048,
+    messages: payloadMessages as any,
+  };
+
+  console.log('Groq API Request:', JSON.stringify(requestBody, null, 2));
+
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      temperature: options?.temperature ?? 0.2,
-      max_tokens: options?.max_tokens ?? 2048,
-      messages: payloadMessages as any,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
     const text = await response.text();
+    console.error('Groq API Error Response:', text);
     throw new Error(`Groq API error ${response.status}: ${text}`);
   }
 

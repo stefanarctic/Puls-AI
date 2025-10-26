@@ -5,21 +5,30 @@ Puls AI is a Next.js web application designed to help users solve and understand
 ## Features
 
 -   **Problem Input Flexibility**: Users can describe their physics problem either by typing the text directly or by uploading an image of the problem statement.
--   **Solution Submission**: Users can upload one or more images of their attempted solution to the physics problem.
--   **AI-Powered Analysis**: The application leverages Genkit and Google's Gemini AI model to:
-    -   Provide a step-by-step correct solution to the submitted problem.
-    -   Analyze the user's uploaded solution for errors.
-    -   Offer constructive feedback on the user's attempt.
-    -   Provide a rating for the user's solution, taking into account numerical approximations.
+-   **Dual Modes**:
+    -   **Analyze Solution**: Upload your attempted solution and receive AI feedback on errors, correct solution, and a rating.
+    -   **Solve Direct**: Get step-by-step solutions to physics problems without submitting your own attempt.
+-   **AI-Powered Analysis**: The application uses Groq's Llama 4 Scout AI model to:
+    -   Analyze uploaded solutions for errors and provide targeted feedback.
+    -   Generate complete step-by-step solutions to physics problems.
+    -   Offer detailed explanations for each step of the solution.
+    -   Provide formulas used and final answers with proper units.
+    -   Offer ratings for submitted solutions, taking into account numerical approximations.
 -   **Romanian Language Support**: All interactions and AI responses are in Romanian.
 -   **Modern Tech Stack**: Built with Next.js (App Router), TypeScript, Tailwind CSS, and ShadCN UI components for a responsive and modern user experience.
 
 ## How It Works
 
-1.  **Submit Problem**: The user enters the problem text or uploads an image of the problem.
-2.  **Submit Solution**: The user uploads images of their handwritten or typed solution.
-3.  **AI Analysis**: The backend, using Genkit, processes the inputs and sends them to the Gemini model.
-4.  **Get Feedback**: The AI returns a detailed analysis including the correct solution, error breakdown in the user's attempt, and a score.
+**Mode 1: Analyze Your Solution**
+1.  Enter the problem text or upload an image of the problem.
+2.  Upload one or more images of your handwritten or typed solution.
+3.  The AI analyzes your solution and provides feedback.
+4.  Receive a detailed analysis including the correct solution, error breakdown, and a rating out of 10 points.
+
+**Mode 2: Solve Directly**
+1.  Enter the problem text or upload an image of the problem.
+2.  (Optional) Specify additional context if the image contains multiple exercises.
+3.  The AI generates a complete step-by-step solution with detailed explanations.
 
 This project aims to provide an interactive learning tool for physics students, allowing them to get instant feedback and guidance on their problem-solving skills.
 
@@ -55,39 +64,25 @@ Follow these steps to get the project up and running on your local machine.
 
 3.  **Set up environment variables:**
 
-    Create a `.env` file in the root of the project by copying the example file (if one exists, otherwise create it from scratch):
-
-    ```
-    cp .env.example .env 
-    ```
-    *(If `.env.example` doesn't exist, create `.env` manually.)*
-
-    Open the `.env` file and add your Google Generative AI API key:
+    Create a `.env` file in the root of the project and add your Groq API key:
 
     ```env
-    GOOGLE_GENAI_API_KEY=YOUR_GEMINI_API_KEY
+    GROQ_API_KEY=your_groq_api_key_here
     ```
-    Replace `YOUR_GEMINI_API_KEY` with your actual API key from Google AI Studio.
+    Replace `your_groq_api_key_here` with your actual API key from [Groq Console](https://console.groq.com/).
+    
+    **Optional:** The application can be configured to use a specific model. By default, it uses `meta-llama/llama-4-scout-17b-16e-instruct`. You can override this by adding:
+    ```env
+    GROQ_MODEL=your_preferred_model
+    ```
 
 ### Running the Application
 
-The application consists of two main parts that need to be run: the Genkit development server (for AI functionalities) and the Next.js development server (for the frontend).
+The application runs as a single Next.js server with API routes handling the AI processing.
 
-1.  **Start the Genkit development server:**
+1.  **Start the Next.js development server:**
 
-    Open a new terminal window/tab in the project root and run:
-    ```bash
-    npm run genkit:dev
-    ```
-    Or using yarn:
-    ```bash
-    yarn genkit:dev
-    ```
-    This will typically start the Genkit server, often on port 3400 (or as configured). Keep this terminal running.
-
-2.  **Start the Next.js development server:**
-
-    Open another new terminal window/tab in the project root and run:
+    In the project root directory, run:
     ```bash
     npm run dev
     ```
@@ -95,10 +90,18 @@ The application consists of two main parts that need to be run: the Genkit devel
     ```bash
     yarn dev
     ```
-    This will start the Next.js application, usually on `http://localhost:9002` (as per the `package.json` script).
+    This will start the Next.js application on `http://localhost:9002` (as per the `package.json` script).
 
-3.  **Access the application:**
+2.  **Access the application:**
 
     Open your web browser and navigate to `http://localhost:9002` (or the port specified in your terminal).
 
 You should now have Puls AI running locally!
+
+## Technology Stack
+
+- **Frontend**: Next.js 15 with App Router, React 18, TypeScript
+- **AI Processing**: Groq API with Llama 4 Scout model
+- **Styling**: Tailwind CSS
+- **UI Components**: ShadCN UI (Radix UI primitives)
+- **Markdown Rendering**: react-markdown with remark and rehype plugins for physics equations
