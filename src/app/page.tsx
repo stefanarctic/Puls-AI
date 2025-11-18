@@ -16,6 +16,7 @@ import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-pro
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DropZone from "@/components/ui/drop-zone";
+import SolveProblemForm from '@/components/solve-problem-form';
 
 interface SolutionImage {
   file: File;
@@ -409,11 +410,7 @@ export default function PhysicsProblemSolverPage() {
             </TabsContent>
 
             <TabsContent value="solve">
-              <iframe
-                src="/solve"
-                className="w-full h-[800px] border-0"
-                title="Rezolvă Problema"
-              />
+              <SolveProblemForm variant="embedded" />
             </TabsContent>
           </Tabs>
         </CardContent>
