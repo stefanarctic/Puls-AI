@@ -8,7 +8,9 @@ Puls AI is a Next.js web application designed to help users solve and understand
 -   **Dual Modes**:
     -   **Analyze Solution**: Upload your attempted solution and receive AI feedback on errors, correct solution, and a rating.
     -   **Solve Direct**: Get step-by-step solutions to physics problems without submitting your own attempt.
--   **AI-Powered Analysis**: The application uses Groq's Llama 4 Scout AI model to:
+-   **AI-Powered Analysis & Solving**:
+    -   Analyze mode still uses Groq's Llama 4 Scout AI model to inspect user solutions.
+    -   The direct solving experience now streams responses from the ElevenLabs PULS AI agent via their JavaScript SDK.
     -   Analyze uploaded solutions for errors and provide targeted feedback.
     -   Generate complete step-by-step solutions to physics problems.
     -   Offer detailed explanations for each step of the solution.
@@ -64,7 +66,7 @@ Follow these steps to get the project up and running on your local machine.
 
 3.  **Set up environment variables:**
 
-    Create a `.env` file in the root of the project and add your Groq API key:
+    Create a `.env` file in the root of the project and configure the AI credentials:
 
     ```env
     GROQ_API_KEY=your_groq_api_key_here
@@ -75,6 +77,15 @@ Follow these steps to get the project up and running on your local machine.
     ```env
     GROQ_MODEL=your_preferred_model
     ```
+
+    For the ElevenLabs-powered solving flow you also need the public agent identifier:
+
+    ```env
+    NEXT_PUBLIC_ELEVENLABS_AGENT_ID=agent_xxxxx
+    ```
+
+    - For public ElevenLabs agents the `agentId` is all you need.
+    - If you migrate to private agents, expose either a short-lived signed URL or WebRTC conversation token through your own backend and pass it from the client to `Conversation.startSession` as described in the [official ElevenLabs docs](https://elevenlabs.io/docs/agents-platform/libraries/java-script).
 
 ### Running the Application
 
@@ -101,7 +112,9 @@ You should now have Puls AI running locally!
 ## Technology Stack
 
 - **Frontend**: Next.js 15 with App Router, React 18, TypeScript
-- **AI Processing**: Groq API with Llama 4 Scout model
+- **AI Processing**:
+  - Groq API (Llama 4 Scout) for solution analysis workflows
+  - ElevenLabs Agents JS SDK for real-time conversations in the solving workflow
 - **Styling**: Tailwind CSS
 - **UI Components**: ShadCN UI (Radix UI primitives)
 - **Markdown Rendering**: react-markdown with remark and rehype plugins for physics equations

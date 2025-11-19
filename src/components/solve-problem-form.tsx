@@ -9,9 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import Markdown from "@/components/ui/markdown";
-import { Upload, CheckCircle, XCircle, FileText, FileImage, Trash2 } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, FileText, FileImage, Trash2, ListChecks, ClipboardList } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import type { SolvePhysicsProblemOutput } from '@/ai/flows/solve-physics-problem';
+import { Conversation } from '@elevenlabs/client';
+import { Anybody } from 'next/font/google';
 
 interface SolutionImage {
   file: File;
@@ -24,11 +25,33 @@ interface SolveProblemFormProps {
   variant?: SolveProblemFormVariant;
 }
 
+interface ElevenLabsSolveResult {
+  problemSummary?: string;
+  solutionSummary?: string;
+  solution?: string;
+  explanation?: string;
+  formulas?: string[];
+  finalAnswer?: string;
+}
+
+const ELEVENLABS_AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID;
+
+const containsMathDelimiters = (value: string): boolean => {
+  return /(\$\$?|\\\[|\\\(|\\begin\{)/.test(value);
+};
+
+const wrapAsDisplayMath = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (containsMathDelimiters(trimmed)) return trimmed;
+  return `$$${trimmed}$$`;
+};
+
 export default function SolveProblemForm({ variant = 'standalone' }: SolveProblemFormProps) {
   const [problemText, setProblemText] = useState<string>('');
   const [problemImage, setProblemImage] = useState<SolutionImage | null>(null);
   const [additionalContext, setAdditionalContext] = useState<string>('');
-  const [solutionResult, setSolutionResult] = useState<SolvePhysicsProblemOutput | null>(null);
+  const [solutionResult, setSolutionResult] = useState<ElevenLabsSolveResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +101,141 @@ export default function SolveProblemForm({ variant = 'standalone' }: SolveProble
     setProblemImage(null);
   };
 
+  const parseAgentResponse = (raw: string): ElevenLabsSolveResult | null => {
+    const attemptParsers: Array<() => unknown> = [
+      () => {
+        const match = raw.match(/```json\s*([\s\S]*?)```/i);
+        return match ? JSON.parse(match[1]) : undefined;
+      },
+      () => {
+        const match = raw.match(/```\s*([\s\S]*?)```/);
+        return match ? JSON.parse(match[1]) : undefined;
+      },
+      () => {
+        const match = raw.match(/\{[\s\S]*\}/);
+        return match ? JSON.parse(match[0]) : undefined;
+      },
+      () => JSON.parse(raw),
+    ];
+
+    for (const parser of attemptParsers) {
+      try {
+        const result = parser();
+        if (result && typeof result === 'object') {
+          return result as ElevenLabsSolveResult;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  };
+
+  const requestSolutionFromElevenLabs = async (): Promise<ElevenLabsSolveResult> => {
+    if (!ELEVENLABS_AGENT_ID) {
+      throw new Error('Lipsește NEXT_PUBLIC_ELEVENLABS_AGENT_ID în mediul de execuție.');
+    }
+
+    const userDetails = [
+      problemText.trim() ? `Text problemă:\n${problemText.trim()}` : '',
+      problemImage?.previewUrl ? `Imagine problemă (Data URI):\n${problemImage.previewUrl}` : '',
+      additionalContext.trim() ? `Context suplimentar:\n${additionalContext.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const instructions = `Ești expert în fizică și răspunzi DOAR în limba română. Primești detaliile unei probleme și trebuie să generezi un răspuns structurat.
+
+OBIECTIV: oferă o soluție clară, riguroasă și verificabilă.
+
+REGULI:
+1. Începe prin a reformula foarte pe scurt problema în câmpul "problemSummary" (max 2 fraze).
+2. Include o sinteză a abordării în câmpul "solutionSummary" (max 3 fraze).
+3. Prezintă pașii compleți ai rezolvării în "solution" (markdown permis).
+4. Explică conceptele cheie și justificările în "explanation" (markdown permis).
+5. Listează formulele folosite în "formulas" ca array de string-uri.
+6. Furnizează răspunsul final clar, cu unități, în "finalAnswer".
+7. Respectă formatul JSON: {"problemSummary":"","solutionSummary":"","solution":"","explanation":"","formulas":[""],"finalAnswer":""}
+8. Dacă informațiile sunt insuficiente, explică situația în toate câmpurile și sugerează clarificări.
+
+Nu include text în afara obiectului JSON.`;
+
+    const prompt = `${instructions}
+
+DETALII UTILIZATOR:
+${userDetails || 'Utilizatorul nu a furnizat text, doar imaginea atașată.'}`;
+
+    return new Promise((resolve, reject) => {
+      let conversationInstance: Conversation | null = null;
+      let aiBuffer = '';
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          finishError(new Error('Agentul ElevenLabs nu a răspuns la timp. Încearcă din nou.'));
+        }
+      }, 60_000);
+
+      const cleanup = async () => {
+        clearTimeout(timeoutId);
+        if (conversationInstance) {
+          try {
+            await conversationInstance.endSession();
+          } catch {
+            // Ignore end session errors
+          }
+          conversationInstance = null;
+        }
+      };
+
+      const finishSuccess = async (payload: ElevenLabsSolveResult) => {
+        if (settled) return;
+        settled = true;
+        await cleanup();
+        resolve(payload);
+      };
+
+      const finishError = async (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        await cleanup();
+        if (err instanceof Error) {
+          reject(err);
+        } else {
+          reject(new Error('Conversatia ElevenLabs s-a încheiat cu o eroare.'));
+        }
+      };
+
+      (async () => {
+        try {
+          conversationInstance = await Conversation.startSession({
+        agentId: ELEVENLABS_AGENT_ID,
+        connectionType: 'websocket',
+        textOnly: true,
+        onMessage: ({ source, message }) => {
+          if (source !== 'ai' || !message) return;
+          aiBuffer += message;
+          const parsed = parseAgentResponse(aiBuffer);
+          if (parsed) {
+            finishSuccess(parsed);
+          }
+        },
+        onDisconnect: () => {
+          if (!settled) {
+            finishError(new Error('Conversația s-a închis înainte de a primi răspunsul.'));
+          }
+        },
+        onError: (err: any) => {
+          finishError(err instanceof Error ? err : new Error(String(err)));
+        },
+          });
+          conversationInstance.sendUserMessage(prompt);
+        } catch (err) {
+          finishError(err);
+        }
+      })();
+    });
+  };
+
   const handleSubmit = async () => {
     if (!problemText.trim() && !problemImage) {
       setError('Te rog introdu textul problemei SAU încarcă o imagine a problemei.');
@@ -94,34 +252,26 @@ export default function SolveProblemForm({ variant = 'standalone' }: SolveProble
     setSolutionResult(null);
 
     try {
-      const response = await fetch('/api/solve', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          problemText: problemText.trim() || undefined,
-          problemPhotoDataUri: problemImage?.previewUrl,
-          additionalContext: additionalContext.trim() || undefined,
-        }),
-      });
+      const result = await requestSolutionFromElevenLabs();
+      const sanitized: ElevenLabsSolveResult = {
+        problemSummary: result.problemSummary?.trim() || '',
+        solutionSummary: result.solutionSummary?.trim() || '',
+        solution: result.solution?.trim() || '',
+        explanation: result.explanation?.trim() || '',
+        formulas: Array.isArray(result.formulas) ? result.formulas : [],
+        finalAnswer: result.finalAnswer?.trim() || '',
+      };
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || `Request failed with status ${response.status}`);
-      }
-
-      setSolutionResult(result);
+      setSolutionResult(sanitized);
       setTimeout(() => {
         solutionResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
       toast({
         title: "Succes",
-        description: "Problema a fost rezolvată cu succes.",
+        description: "Agentul ElevenLabs a generat o soluție.",
       });
     } catch (err) {
-      console.error('Error solving problem:', err);
+      console.error('Error solving problem via ElevenLabs:', err);
       const message = err instanceof Error ? err.message : 'A apărut o eroare necunoscută la rezolvarea problemei.';
       setError(message);
       toast({
@@ -249,6 +399,33 @@ export default function SolveProblemForm({ variant = 'standalone' }: SolveProble
       {solutionResult && (
         <div ref={solutionResultRef} className="space-y-6 mt-6 border-t pt-6">
           <div className="space-y-6">
+            {(solutionResult.problemSummary || solutionResult.solutionSummary) && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {solutionResult.problemSummary && (
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h3 className="font-semibold mb-2 text-slate-800 flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4" />
+                      Rezumat Problemă
+                    </h3>
+                    <div className="prose max-w-none text-slate-900">
+                      <Markdown>{solutionResult.problemSummary}</Markdown>
+                    </div>
+                  </div>
+                )}
+                {solutionResult.solutionSummary && (
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h3 className="font-semibold mb-2 text-slate-800 flex items-center gap-2">
+                      <ListChecks className="h-4 w-4" />
+                      Rezumat Rezolvare
+                    </h3>
+                    <div className="prose max-w-none text-slate-900">
+                      <Markdown>{solutionResult.solutionSummary}</Markdown>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {solutionResult.solution && (
               <div className={`p-4 rounded-lg border ${
                 solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') ||
@@ -312,7 +489,7 @@ export default function SolveProblemForm({ variant = 'standalone' }: SolveProble
                   {solutionResult.formulas.map((formula, index) => (
                     <div key={index} className="bg-white p-3 rounded border border-purple-100">
                       <div className="prose max-w-none text-purple-900">
-                        <Markdown>{formula}</Markdown>
+                        <Markdown>{wrapAsDisplayMath(formula)}</Markdown>
                       </div>
                     </div>
                   ))}
