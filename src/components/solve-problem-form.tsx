@@ -158,6 +158,14 @@ REGULI:
 7. Respectă formatul JSON: {"problemSummary":"","solutionSummary":"","solution":"","explanation":"","formulas":[""],"finalAnswer":""}
 8. Dacă informațiile sunt insuficiente, explică situația în toate câmpurile și sugerează clarificări.
 
+IMPORTANT - FORMATARE MATEMATICĂ:
+- Pentru TOATE expresiile matematice în "solution" și "explanation", folosește OBLIGATORIU delimitatori MathJax: $$expresie$$
+- Exemplu corect: "Formula $$\\Delta x = \\frac{\\lambda}{2}$$ este valabilă pentru sistemele de interferență."
+- Exemplu corect: "Diferența de drum este $$\\Delta d = n\\lambda, \\quad n \\in \\mathbb{Z}$$."
+- NU lăsa expresiile LaTeX neformatate (fără $$). Toate expresiile matematice trebuie să fie în $$...$$
+- Pentru formule simple inline în text, poți folosi $expresie$ (cu un singur $ pe fiecare parte)
+- În câmpul "formulas", fiecare formulă trebuie să fie deja în format MathJax cu $$...$$
+
 Nu include text în afara obiectului JSON.`;
 
     const prompt = `${instructions}
