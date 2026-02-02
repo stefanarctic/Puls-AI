@@ -14,6 +14,7 @@ import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as Image
 import NextImage from 'next/image'; // Renamed to avoid conflict with ImageIcon
 import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
 import { useToast } from "@/hooks/use-toast";
+import Markdown from "@/components/ui/markdown";
 
 interface ImageFile {
   file: File;
@@ -23,6 +24,7 @@ interface ImageFile {
 export default function ApiClientExamplePage() {
   const [problemText, setProblemText] = useState<string>('');
   const [problemImageFile, setProblemImageFile] = useState<ImageFile | null>(null);
+  const [solutionText, setSolutionText] = useState<string>('');
   const [solutionImageFiles, setSolutionImageFiles] = useState<ImageFile[]>([]);
   
   const [apiResponse, setApiResponse] = useState<AnalyzePhysicsProblemOutput | null>(null);
@@ -89,9 +91,9 @@ export default function ApiClientExamplePage() {
       toast({ variant: "destructive", title: "Lipsă Date Problemă", description: "Introdu textul sau imaginea problemei." });
       return;
     }
-    if (solutionImageFiles.length === 0) {
-      setError('Te rog încarcă cel puțin o imagine cu rezolvarea.');
-      toast({ variant: "destructive", title: "Lipsă Soluție", description: "Încarcă cel puțin o imagine cu soluția." });
+    if (!solutionText.trim() && solutionImageFiles.length === 0) {
+      setError('Te rog introdu textul soluției SAU încarcă cel puțin o imagine cu rezolvarea.');
+      toast({ variant: "destructive", title: "Lipsă Soluție", description: "Introdu textul soluției sau încarcă cel puțin o imagine cu soluția." });
       return;
     }
 
@@ -103,7 +105,8 @@ export default function ApiClientExamplePage() {
       const payload = {
         problemText: problemText.trim() || undefined,
         problemPhotoDataUri: problemImageFile?.previewUrl,
-        solutionPhotoDataUris: solutionImageFiles.map(img => img.previewUrl),
+        solutionText: solutionText.trim() || undefined,
+        solutionPhotoDataUris: solutionImageFiles.length > 0 ? solutionImageFiles.map(img => img.previewUrl) : undefined,
       };
 
       const response = await fetch('/api/analyze', {
@@ -176,24 +179,38 @@ export default function ApiClientExamplePage() {
             </div>
 
             {/* Solution Input */}
-            <div className="space-y-2">
-              <Label htmlFor="solution-images-api" className="font-semibold flex items-center gap-2"><ImageIcon /> Imagini Soluție ({solutionImageFiles.length})*</Label>
-              <Input id="solution-images-api" type="file" accept="image/*" multiple ref={solutionInputRef} onChange={handleSolutionFilesChange} className="hidden" />
-              <Button variant="outline" onClick={() => triggerFileInput(solutionInputRef)} className="w-full">
-                <Upload className="mr-2" /> Adaugă Imagini Soluție
-              </Button>
-              {solutionImageFiles.length > 0 ? (
-                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {solutionImageFiles.map((img, index) => (
-                    <div key={index} className="relative group aspect-square">
-                      <NextImage src={img.previewUrl} alt={`Soluție ${index + 1}`} fill className="rounded-md object-contain border" />
-                      <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => removeSolutionImage(index)}><Trash2 /></Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                 <div className="mt-2 h-[100px] w-full flex items-center justify-center border rounded-md bg-secondary"><span className="text-muted-foreground text-sm">Nicio imagine cu soluția.</span></div>
-              )}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="solution-text-api" className="font-semibold flex items-center gap-2"><FileText /> Text Soluție</Label>
+                <Textarea
+                  id="solution-text-api"
+                  placeholder="Scrie soluția ta..."
+                  value={solutionText}
+                  onChange={(e) => setSolutionText(e.target.value)}
+                  className="h-32"
+                  disabled={solutionImageFiles.length > 0}
+                />
+              </div>
+              <div className="text-center text-sm text-muted-foreground">SAU</div>
+              <div className="space-y-2">
+                <Label htmlFor="solution-images-api" className="font-semibold flex items-center gap-2"><ImageIcon /> Imagini Soluție ({solutionImageFiles.length})</Label>
+                <Input id="solution-images-api" type="file" accept="image/*" multiple ref={solutionInputRef} onChange={handleSolutionFilesChange} className="hidden" disabled={!!solutionText.trim()} />
+                <Button variant="outline" onClick={() => triggerFileInput(solutionInputRef)} className="w-full" disabled={!!solutionText.trim()}>
+                  <Upload className="mr-2" /> Adaugă Imagini Soluție
+                </Button>
+                {solutionImageFiles.length > 0 ? (
+                  <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {solutionImageFiles.map((img, index) => (
+                      <div key={index} className="relative group aspect-square">
+                        <NextImage src={img.previewUrl} alt={`Soluție ${index + 1}`} fill className="rounded-md object-contain border" />
+                        <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => removeSolutionImage(index)}><Trash2 /></Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                   <div className="mt-2 h-[100px] w-full flex items-center justify-center border rounded-md bg-secondary"><span className="text-muted-foreground text-sm">Nicio imagine cu soluția.</span></div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -205,7 +222,7 @@ export default function ApiClientExamplePage() {
             </Alert>
           )}
 
-          <Button onClick={handleSubmit} disabled={isLoading || solutionImageFiles.length === 0 || (!problemText.trim() && !problemImageFile)} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mt-4">
+          <Button onClick={handleSubmit} disabled={isLoading || (!solutionText.trim() && solutionImageFiles.length === 0) || (!problemText.trim() && !problemImageFile)} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mt-4">
             {isLoading ? 'Se trimite la API...' : 'Trimite la API'}
           </Button>
 
@@ -223,15 +240,27 @@ export default function ApiClientExamplePage() {
               </h3>
               <Card className="bg-secondary border-yellow-500 border-2">
                 <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Star /> Punctaj</CardTitle></CardHeader>
-                <CardContent><p className="text-lg font-semibold whitespace-pre-wrap">{apiResponse.rating}</p></CardContent>
+                <CardContent>
+                  <div className="prose max-w-none text-lg font-semibold">
+                    <Markdown>{apiResponse.rating}</Markdown>
+                  </div>
+                </CardContent>
               </Card>
               <Card className="bg-secondary">
                 <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Calculator className="w-5 h-5" /> Soluție Corectă</CardTitle></CardHeader>
-                <CardContent><p className="text-sm whitespace-pre-wrap">{apiResponse.solution}</p></CardContent>
+                <CardContent>
+                  <div className="prose max-w-none text-sm">
+                    <Markdown>{apiResponse.solution}</Markdown>
+                  </div>
+                </CardContent>
               </Card>
               <Card className="bg-secondary">
                 <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Lightbulb /> Analiză Erori & Feedback</CardTitle></CardHeader>
-                <CardContent><p className="text-sm whitespace-pre-wrap">{apiResponse.errorAnalysis}</p></CardContent>
+                <CardContent>
+                  <div className="prose max-w-none text-sm">
+                    <Markdown>{apiResponse.errorAnalysis}</Markdown>
+                  </div>
+                </CardContent>
               </Card>
             </div>
           )}

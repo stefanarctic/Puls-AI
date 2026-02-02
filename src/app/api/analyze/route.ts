@@ -18,16 +18,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as AnalyzePhysicsProblemInput;
 
-    if (!body || (typeof body.solutionPhotoDataUris === 'undefined' || !Array.isArray(body.solutionPhotoDataUris))) {
-      apiResponse = NextResponse.json({ error: 'Invalid request body: solutionPhotoDataUris (array) is required.' }, { status: 400 });
-    } else if (!body.problemText && !body.problemPhotoDataUri) {
+    if (!body.problemText && !body.problemPhotoDataUri) {
       apiResponse = NextResponse.json({ error: 'Invalid request body: problemText or problemPhotoDataUri is required.' }, { status: 400 });
-    } else if (body.solutionPhotoDataUris.length === 0) {
-      apiResponse = NextResponse.json({ error: 'Invalid request body: At least one solutionPhotoDataUri is required.' }, { status: 400 });
+    } else if (!body.solutionText && (!body.solutionPhotoDataUris || !Array.isArray(body.solutionPhotoDataUris) || body.solutionPhotoDataUris.length === 0)) {
+      apiResponse = NextResponse.json({ error: 'Invalid request body: solutionText or at least one solutionPhotoDataUri is required.' }, { status: 400 });
     } else {
       const result = await handleAnalyzeProblem({
         problemText: body.problemText,
         problemPhotoDataUri: body.problemPhotoDataUri,
+        solutionText: body.solutionText,
         solutionPhotoDataUris: body.solutionPhotoDataUris,
         additionalContext: body.additionalContext,
       });

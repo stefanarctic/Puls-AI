@@ -18,16 +18,20 @@ const AnalyzePhysicsProblemInputSchema = z.object({
   problemPhotoDataUri: z.string().optional().describe(
     "O fotografie a enunțului problemei, ca data URI (opțional dacă se furnizează textul problemei). Format așteptat: 'data:<mimetype>;base64,<encoded_data>'."
   ),
+  solutionText: z.string().optional().describe('Textul soluției utilizatorului (opțional dacă se furnizează imagini cu soluția).'),
   solutionPhotoDataUris: z.array(
       z.string().describe(
         "A photo of the user's attempt/solution, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
       )
-    ).min(1, { message: "Este necesară cel puțin o imagine cu soluția." }) // Ensure at least one solution image
+    ).optional()
      .describe('O listă (array) cu imaginile soluției utilizatorului, sub formă de data URI.'),
   additionalContext: z.string().optional().describe('Context adițional sau instrucțiuni specifice pentru analiză (opțional).'),
 }).refine(data => data.problemText || data.problemPhotoDataUri, {
     message: "Trebuie furnizat cel puțin textul problemei sau o imagine a problemei.",
     path: ["problemText", "problemPhotoDataUri"], // Indicate which fields are related to the error
+}).refine(data => data.solutionText || (data.solutionPhotoDataUris && data.solutionPhotoDataUris.length > 0), {
+    message: "Trebuie furnizat cel puțin textul soluției sau cel puțin o imagine cu soluția.",
+    path: ["solutionText", "solutionPhotoDataUris"], // Indicate which fields are related to the error
 });
 
 export type AnalyzePhysicsProblemInput = z.infer<typeof AnalyzePhysicsProblemInputSchema>;
@@ -48,34 +52,52 @@ export async function analyzePhysicsProblem(input: AnalyzePhysicsProblemInput): 
 const SYSTEM_PROMPT = `Ești un expert în rezolvarea problemelor de fizică și un evaluator corect și flexibil. Analizează problema (text și/sau imagine) și soluția utilizatorului din imagini. Aplică toleranță rezonabilă la aproximări numerice. Răspunde exclusiv în limba română și furnizează: 1) Soluția corectă, 2) Analiza erorilor, 3) Punctaj "X/10 puncte". Foloseste un limbaj care sa nu faca referinta la tine ca si cum ai fi un AI. Nu mai zice ca voi selecta, zi vom selecta, si in celelalte cazuri la fel.`;
 
 async function callGroqAnalyze(input: AnalyzePhysicsProblemInput): Promise<AnalyzePhysicsProblemOutput> {
-  const messages: GroqChatMessage[] = [
-    { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT }] },
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: `Textul Problemei:${input.problemText ? `\n${input.problemText}` : ' (nedatat)'}` },
-        ...(input.problemPhotoDataUri ? [{ type: 'image_url', image_url: { url: input.problemPhotoDataUri } }] as const : []),
-        ...(input.additionalContext ? [{ type: 'text', text: `Context Adițional: ${input.additionalContext}` }] as const : []),
-        { type: 'text', text: 'Imagini cu Soluția Utilizatorului (urmează una sau mai multe):' },
-        ...((input.solutionPhotoDataUris ?? []).map(url => ({ type: 'image_url', image_url: { url } }) as const)),
-        { type: 'text', text: 'Returnează un JSON cu cheile: solution, errorAnalysis, rating.' },
-      ],
-    },
+  const content: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  > = [
+    { type: 'text', text: `Textul Problemei:${input.problemText ? `\n${input.problemText}` : ' (nedatat)'}` },
   ];
 
-  const content = await runThrottled(() => groqChat(messages, { max_tokens: 2000 }));
+  if (input.problemPhotoDataUri) {
+    content.push({ type: 'image_url', image_url: { url: input.problemPhotoDataUri } });
+  }
+
+  if (input.additionalContext) {
+    content.push({ type: 'text', text: `Context Adițional: ${input.additionalContext}` });
+  }
+
+  if (input.solutionText) {
+    content.push({ type: 'text', text: `Textul Soluției Utilizatorului:\n${input.solutionText}` });
+  }
+
+  if (input.solutionPhotoDataUris && input.solutionPhotoDataUris.length > 0) {
+    content.push({ type: 'text', text: 'Imagini cu Soluția Utilizatorului (urmează una sau mai multe):' });
+    for (const url of input.solutionPhotoDataUris) {
+      content.push({ type: 'image_url', image_url: { url } });
+    }
+  }
+
+  content.push({ type: 'text', text: 'Returnează un JSON cu cheile: solution, errorAnalysis, rating.' });
+
+  const messages: GroqChatMessage[] = [
+    { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT }] },
+    { role: 'user', content },
+  ];
+
+  const responseContent = await runThrottled(() => groqChat(messages, { max_tokens: 2000 }));
 
   let solution = '';
   let errorAnalysis = '';
   let rating = '';
   try {
-    const match = content.match(/\{[\s\S]*\}$/);
-    const json = JSON.parse(match ? match[0] : content);
+    const match = responseContent.match(/\{[\s\S]*\}$/);
+    const json = JSON.parse(match ? match[0] : responseContent);
     solution = String(json.solution ?? '');
     errorAnalysis = String(json.errorAnalysis ?? '');
     rating = String(json.rating ?? '');
   } catch {
-    solution = content;
+    solution = responseContent;
     errorAnalysis = 'Analiza erorilor este inclusă în textul de mai sus.';
     rating = '—/10 puncte';
   }

@@ -54,33 +54,42 @@ STRUCTURA RĂSPUNSULUI:
 Folosește un limbaj care să nu facă referință la tine ca AI. Spune "vom calcula" în loc de "voi calcula"."`;
 
 async function callGroqSolve(input: SolvePhysicsProblemInput): Promise<SolvePhysicsProblemOutput> {
-  const messages: GroqChatMessage[] = [
-    { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT }] },
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: `Textul Problemei:${input.problemText ? `\n${input.problemText}` : ' (nu este furnizat text)'}` },
-        ...(input.problemPhotoDataUri ? [{ type: 'image_url', image_url: { url: input.problemPhotoDataUri } }] as const : []),
-        ...(input.additionalContext ? [{ type: 'text', text: `Context Adițional/Exercițiul dorit: ${input.additionalContext}` }] as const : []),
-        { type: 'text', text: `INSTRUCȚIUNI IMPORTANTE:
+  const content: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  > = [
+    { type: 'text', text: `Textul Problemei:${input.problemText ? `\n${input.problemText}` : ' (nu este furnizat text)'}` },
+  ];
+
+  if (input.problemPhotoDataUri) {
+    content.push({ type: 'image_url', image_url: { url: input.problemPhotoDataUri } });
+  }
+
+  if (input.additionalContext) {
+    content.push({ type: 'text', text: `Context Adițional/Exercițiul dorit: ${input.additionalContext}` });
+  }
+
+  content.push({ type: 'text', text: `INSTRUCȚIUNI IMPORTANTE:
 1. Dacă vezi mai multe exerciții în imagine, verifică contextul adițional pentru a vedea care exercițiu trebuie rezolvat
 2. Dacă contextul specifică "ex. 17" sau "exercițiul 17", caută și rezolvă DOAR exercițiul cu numărul 17 din imagine
 3. Dacă nu este clar care exercițiu să rezolvi, întreabă în câmpul "solution"
 4. Oferă explicații FOARTE detaliate pentru fiecare pas - nu doar calculele, ci și raționamentul
 5. OBLIGATORIU: Returnează întotdeauna un răspuns valid în format JSON
-6. Returnează un JSON cu cheile: solution (pași detaliați), explanation (explicații detaliate), formulas (array cu formule), finalAnswer (răspuns final cu unități)` },
-      ],
-    },
+6. Returnează un JSON cu cheile: solution (pași detaliați), explanation (explicații detaliate), formulas (array cu formule), finalAnswer (răspuns final cu unități)` });
+
+  const messages: GroqChatMessage[] = [
+    { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT }] },
+    { role: 'user', content },
   ];
 
-  const content = await runThrottled(() => groqChat(messages, { max_tokens: 4000 }));
+  const responseContent: string = await runThrottled(() => groqChat(messages, { max_tokens: 4000 }));
 
   // Debug logging
-  console.log('AI Response content:', content);
-  console.log('Content length:', content?.length || 0);
+  console.log('AI Response content:', responseContent);
+  console.log('Content length:', responseContent?.length || 0);
 
   // Handle empty or null content
-  if (!content || content.trim().length === 0) {
+  if (!responseContent || responseContent.trim().length === 0) {
     return {
       solution: 'Nu am putut genera un răspuns. Te rog încearcă din nou sau reformulează cererea.',
       explanation: 'A apărut o problemă în procesarea cererii. Verifică dacă imaginea este clară și textul este lizibil.',
@@ -98,21 +107,21 @@ async function callGroqSolve(input: SolvePhysicsProblemInput): Promise<SolvePhys
     const tryParsers: Array<() => unknown> = [
       // 1) ```json ... ``` fenced block
       () => {
-        const fenced = content.match(/```json\s*([\s\S]*?)\s*```/i);
+        const fenced = responseContent.match(/```json\s*([\s\S]*?)\s*```/i);
         return fenced ? JSON.parse(fenced[1]) : undefined;
       },
       // 2) Any fenced block without language
       () => {
-        const fenced = content.match(/```\s*([\s\S]*?)\s*```/);
+        const fenced = responseContent.match(/```\s*([\s\S]*?)\s*```/);
         return fenced ? JSON.parse(fenced[1]) : undefined;
       },
       // 3) First {...} block (greedy enough to include nested braces)
       () => {
-        const brace = content.match(/\{[\s\S]*?\}/);
+        const brace = responseContent.match(/\{[\s\S]*?\}/);
         return brace ? JSON.parse(brace[0]) : undefined;
       },
       // 4) Raw content (last resort)
-      () => JSON.parse(content),
+      () => JSON.parse(responseContent),
     ];
 
     let parsed: any | undefined;
@@ -194,7 +203,7 @@ async function callGroqSolve(input: SolvePhysicsProblemInput): Promise<SolvePhys
     formulas = Array.isArray(f) ? f.map((s: unknown) => safeToString(s)) : [];
   } catch (error) {
     console.log('JSON parsing failed, using raw content:', error);
-    solution = content || 'Conținut indisponibil';
+    solution = responseContent || 'Conținut indisponibil';
     explanation = 'Explicațiile sunt incluse în textul de mai sus.';
     finalAnswer = 'Verifică soluția de mai sus pentru răspunsul final.';
     formulas = [];

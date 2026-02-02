@@ -1,5 +1,393 @@
 'use client';
 
+/**
+ * ====================================================================================
+ * DOCUMENTAȚIE COMPLETĂ - SISTEMUL DE API PULS-AI
+ * ====================================================================================
+ * 
+ * Acest fișier conține documentația completă a sistemului de API pentru aplicația
+ * Puls-AI, care oferă funcționalități de rezolvare și analiză a problemelor de fizică.
+ * 
+ * 
+ * 📋 ENDPOINT-URI DISPONIBILE
+ * ====================================================================================
+ * 
+ * 1. POST /api/solve
+ *    - Scop: Rezolvă o problemă de fizică și generează o soluție detaliată
+ *    - Metodă: POST
+ *    - Content-Type: application/json
+ *    - CORS: Permis pentru toate originile (*)
+ * 
+ * 2. POST /api/analyze
+ *    - Scop: Analizează o soluție propusă de utilizator și oferă feedback
+ *    - Metodă: POST
+ *    - Content-Type: application/json
+ *    - CORS: Permis pentru toate originile (*)
+ * 
+ * 
+ * 🔧 CONFIGURARE ȘI VARIABILE DE MEDIU
+ * ====================================================================================
+ * 
+ * Variabile necesare în .env:
+ * 
+ * 1. GROQ_API_KEY (OBLIGATORIU)
+ *    - Cheia API pentru serviciul Groq
+ *    - Obținută de la: https://console.groq.com/
+ *    - Folosită pentru procesarea AI prin API-ul Groq
+ * 
+ * 2. GROQ_MODEL (OPȚIONAL)
+ *    - Modelul AI folosit pentru procesare
+ *    - Valoare implicită: 'meta-llama/llama-4-scout-17b-16e-instruct'
+ *    - Poate fi suprascris pentru a folosi alte modele Groq
+ * 
+ * 3. NEXT_PUBLIC_ELEVENLABS_AGENT_ID (OPȚIONAL - pentru flow-ul ElevenLabs)
+ *    - ID-ul agentului ElevenLabs pentru conversații în timp real
+ *    - Folosit în componenta SolveProblemForm pentru flow-ul alternativ
+ * 
+ * 
+ * 📥 ENDPOINT: POST /api/solve
+ * ====================================================================================
+ * 
+ * DESCRIERE:
+ *   Rezolvă o problemă de fizică furnizată ca text și/sau imagine, generând
+ *   o soluție detaliată pas cu pas cu explicații, formule și răspuns final.
+ * 
+ * REQUEST BODY (JSON):
+ *   {
+ *     "problemText"?: string,              // Textul problemei (opțional dacă există problemPhotoDataUri)
+ *     "problemPhotoDataUri"?: string,       // Imaginea problemei ca Data URI (opțional dacă există problemText)
+ *     "additionalContext"?: string          // Context adițional sau instrucțiuni specifice (opțional)
+ *   }
+ * 
+ * VALIDARE:
+ *   - Trebuie furnizat cel puțin UNUL dintre: problemText SAU problemPhotoDataUri
+ *   - Format Data URI: 'data:<mimetype>;base64,<encoded_data>'
+ *   - Exemplu: 'data:image/png;base64,iVBORw0KGgoAAAANS...'
+ * 
+ * RESPONSE SUCCES (200 OK):
+ *   {
+ *     "solution": string,        // Pașii detaliați ai rezolvării (markdown permis)
+ *     "explanation": string,      // Explicații detaliate pentru fiecare pas (markdown permis)
+ *     "formulas": string[],       // Array cu formulele folosite (fiecare în format MathJax)
+ *     "finalAnswer": string       // Răspunsul final cu unități de măsură
+ *   }
+ * 
+ * RESPONSE EROARE (400 Bad Request):
+ *   {
+ *     "error": string            // Mesaj de eroare descriptiv
+ *   }
+ * 
+ * EXEMPLE DE UTILIZARE:
+ * 
+ *   // Exemplu 1: Problemă cu text
+ *   fetch('/api/solve', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify({
+ *       problemText: "Un corp cu masa de 2 kg este lansat vertical în sus cu viteza de 20 m/s. Calculați înălțimea maximă atinsă."
+ *     })
+ *   });
+ * 
+ *   // Exemplu 2: Problemă cu imagine
+ *   const imageDataUri = await fileToDataUri(imageFile);
+ *   fetch('/api/solve', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify({
+ *       problemPhotoDataUri: imageDataUri,
+ *       additionalContext: "Rezolvă exercițiul 17"
+ *     })
+ *   });
+ * 
+ * 
+ * 📊 ENDPOINT: POST /api/analyze
+ * ====================================================================================
+ * 
+ * DESCRIERE:
+ *   Analizează o soluție propusă de utilizator (furnizată ca imagini) comparând-o
+ *   cu soluția corectă, oferind feedback detaliat despre erori și un punctaj.
+ * 
+ * REQUEST BODY (JSON):
+ *   {
+ *     "problemText"?: string,                    // Textul problemei (opțional dacă există problemPhotoDataUri)
+ *     "problemPhotoDataUri"?: string,            // Imaginea problemei ca Data URI (opțional dacă există problemText)
+ *     "solutionText"?: string,                   // Textul soluției utilizatorului (opțional dacă există solutionPhotoDataUris)
+ *     "solutionPhotoDataUris"?: string[],        // Array cu imagini ale soluției utilizatorului (opțional dacă există solutionText)
+ *     "additionalContext"?: string               // Context adițional pentru analiză (opțional)
+ *   }
+ * 
+ * VALIDARE:
+ *   - Trebuie furnizat cel puțin UNUL dintre: problemText SAU problemPhotoDataUri
+ *   - Trebuie furnizat cel puțin UNUL dintre: solutionText SAU solutionPhotoDataUris (cu cel puțin 1 element)
+ *   - Fiecare Data URI trebuie să respecte formatul: 'data:<mimetype>;base64,<encoded_data>'
+ * 
+ * RESPONSE SUCCES (200 OK):
+ *   {
+ *     "solution": string,        // Soluția corectă a problemei (markdown permis)
+ *     "errorAnalysis": string,   // Analiza erorilor din soluția utilizatorului (markdown permis)
+ *     "rating": string           // Punctajul obținut (ex: "7/10 puncte")
+ *   }
+ * 
+ * RESPONSE EROARE (400 Bad Request):
+ *   {
+ *     "error": string            // Mesaj de eroare descriptiv
+ *   }
+ * 
+ * EXEMPLE DE UTILIZARE:
+ * 
+ *   // Exemplu 1: Analiză cu text pentru soluție
+ *   fetch('/api/analyze', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify({
+ *       problemText: "Calculați forța de frecare...",
+ *       solutionText: "Am aplicat legea a doua a lui Newton..."
+ *     })
+ *   });
+ * 
+ *   // Exemplu 2: Analiză cu imagini multiple pentru soluție
+ *   const solutionImages = await Promise.all([
+ *     fileToDataUri(file1),
+ *     fileToDataUri(file2)
+ *   ]);
+ *   
+ *   fetch('/api/analyze', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify({
+ *       problemText: "Calculați forța de frecare...",
+ *       solutionPhotoDataUris: solutionImages
+ *     })
+ *   });
+ * 
+ * 
+ * 🔄 FLUXUL DE PROCESARE
+ * ====================================================================================
+ * 
+ * 1. CLIENT → API ROUTE (/api/solve sau /api/analyze)
+ *    - Clientul trimite request-ul cu datele problemei
+ *    - Route-ul validează input-ul și gestionează CORS
+ * 
+ * 2. API ROUTE → SERVER ACTION (handleSolveProblem / handleAnalyzeProblem)
+ *    - Route-ul apelează server action-ul corespunzător
+ *    - Server action-ul validează din nou input-ul
+ * 
+ * 3. SERVER ACTION → AI FLOW (solvePhysicsProblem / analyzePhysicsProblem)
+ *    - Flow-ul construiește prompt-ul pentru AI
+ *    - Gestionează conversiunea imaginilor în format compatibil
+ * 
+ * 4. AI FLOW → GROQ API
+ *    - Trimite request către Groq API cu prompt-ul și imaginile
+ *    - Folosește modelul configurat (implicit: llama-4-scout-17b-16e-instruct)
+ *    - Gestionează throttling-ul request-urilor
+ * 
+ * 5. GROQ API → AI FLOW
+ *    - Primește răspunsul de la AI
+ *    - Parsează JSON-ul din răspuns (suportă multiple formate)
+ *    - Validează și sanitizează datele
+ * 
+ * 6. AI FLOW → SERVER ACTION → API ROUTE → CLIENT
+ *    - Returnează rezultatul procesat către client
+ *    - Clientul primește răspunsul structurat
+ * 
+ * 
+ * 🛡️ GESTIONAREA EROARILOR
+ * ====================================================================================
+ * 
+ * TIPURI DE EROARE:
+ * 
+ * 1. Erori de validare (400 Bad Request):
+ *    - Input lipsă sau invalid
+ *    - JSON malformat
+ *    - Validări de schema eșuate
+ * 
+ * 2. Erori de procesare (500 Internal Server Error):
+ *    - Erori la apelarea Groq API
+ *    - Erori de parsing JSON
+ *    - Erori neașteptate
+ * 
+ * 3. Erori de timeout:
+ *    - Request-urile pot expira dacă procesarea durează prea mult
+ *    - Timeout implicit: 60 secunde pentru flow-ul ElevenLabs
+ * 
+ * MESAJE DE EROARE:
+ *   - Toate mesajele de eroare sunt returnate în limba română
+ *   - Format consistent: { "error": "mesaj descriptiv" }
+ * 
+ * 
+ * 🔐 SECURITATE ȘI CORS
+ * ====================================================================================
+ * 
+ * CORS CONFIGURATION:
+ *   - Access-Control-Allow-Origin: * (permite toate originile)
+ *   - Access-Control-Allow-Methods: POST, OPTIONS
+ *   - Access-Control-Allow-Headers: Content-Type, Authorization
+ * 
+ * NOTĂ: Configurația CORS actuală permite accesul de la orice origine.
+ *        Pentru producție, ar trebui să restricționați originile permise.
+ * 
+ * VALIDARE INPUT:
+ *   - Toate input-urile sunt validate folosind Zod schemas
+ *   - Validare la nivel de route și server action
+ *   - Sanitizare a output-urilor pentru prevenirea XSS
+ * 
+ * 
+ * 📝 FORMATE DE DATE
+ * ====================================================================================
+ * 
+ * DATA URI FORMAT:
+ *   Format: data:<mimetype>;base64,<base64_encoded_data>
+ *   Exemplu: data:image/png;base64,iVBORw0KGgoAAAANS...
+ * 
+ *   Conversie File → Data URI (JavaScript):
+ *     const fileToDataUri = (file: File): Promise<string> => {
+ *       return new Promise((resolve, reject) => {
+ *         const reader = new FileReader();
+ *         reader.onloadend = () => resolve(reader.result as string);
+ *         reader.onerror = reject;
+ *         reader.readAsDataURL(file);
+ *       });
+ *     };
+ * 
+ * MATHJAX FORMAT:
+ *   - Formulele matematice trebuie să fie în format MathJax
+ *   - Display math: $$formula$$
+ *   - Inline math: $formula$
+ *   - Exemplu: $$E = mc^2$$ sau $\Delta x = v \cdot t$
+ * 
+ * MARKDOWN SUPPORT:
+ *   - Câmpurile "solution" și "explanation" suportă markdown
+ *   - Poți folosi: **bold**, *italic*, liste, link-uri, etc.
+ *   - Formulele matematice pot fi integrate în markdown
+ * 
+ * 
+ * 🚀 OPTIMIZĂRI ȘI BEST PRACTICES
+ * ====================================================================================
+ * 
+ * 1. THROTTLING:
+ *    - Request-urile către Groq API sunt throttled pentru a evita rate limiting
+ *    - Implementat în: src/ai/request-throttle.ts
+ * 
+ * 2. PARSING ROBUST:
+ *    - Sistemul încearcă multiple strategii de parsing JSON din răspunsul AI
+ *    - Suportă: ```json ... ```, ``` ... ```, { ... }, raw JSON
+ * 
+ * 3. VALIDARE MULTIPLĂ:
+ *    - Validare la nivel de route
+ *    - Validare la nivel de server action
+ *    - Validare la nivel de schema Zod
+ * 
+ * 4. ERROR HANDLING:
+ *    - Try-catch blocks la fiecare nivel
+ *    - Logging detaliat pentru debugging
+ *    - Mesaje de eroare clare pentru utilizator
+ * 
+ * 
+ * 📚 EXEMPLE COMPLETE DE INTEGRARE
+ * ====================================================================================
+ * 
+ * EXEMPLU 1: Rezolvare problemă cu text
+ * ```typescript
+ * async function solveProblem(problemText: string) {
+ *   const response = await fetch('/api/solve', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify({ problemText })
+ *   });
+ *   
+ *   if (!response.ok) {
+ *     const error = await response.json();
+ *     throw new Error(error.error);
+ *   }
+ *   
+ *   return await response.json();
+ * }
+ * ```
+ * 
+ * EXEMPLU 2: Analiză soluție cu imagini
+ * ```typescript
+ * async function analyzeSolution(
+ *   problemImage: File,
+ *   solutionImages: File[]
+ * ) {
+ *   const problemDataUri = await fileToDataUri(problemImage);
+ *   const solutionDataUris = await Promise.all(
+ *     solutionImages.map(fileToDataUri)
+ *   );
+ *   
+ *   const response = await fetch('/api/analyze', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify({
+ *       problemPhotoDataUri: problemDataUri,
+ *       solutionPhotoDataUris: solutionDataUris
+ *     })
+ *   });
+ *   
+ *   if (!response.ok) {
+ *     const error = await response.json();
+ *     throw new Error(error.error);
+ *   }
+ *   
+ *   return await response.json();
+ * }
+ * ```
+ * 
+ * EXEMPLU 3: Utilizare în React Component
+ * ```typescript
+ * const [result, setResult] = useState(null);
+ * const [loading, setLoading] = useState(false);
+ * 
+ * const handleSolve = async () => {
+ *   setLoading(true);
+ *   try {
+ *     const data = await solveProblem(problemText);
+ *     setResult(data);
+ *   } catch (error) {
+ *     console.error('Error:', error);
+ *   } finally {
+ *     setLoading(false);
+ *   }
+ * };
+ * ```
+ * 
+ * 
+ * 🔗 FIȘIERE RELEVANTE
+ * ====================================================================================
+ * 
+ * Route Handlers:
+ *   - src/app/api/solve/route.ts          → Endpoint pentru rezolvare
+ *   - src/app/api/analyze/route.ts         → Endpoint pentru analiză
+ * 
+ * Server Actions:
+ *   - src/app/actions.ts                  → handleSolveProblem, handleAnalyzeProblem
+ * 
+ * AI Flows:
+ *   - src/ai/flows/solve-physics-problem.ts    → Logica de rezolvare
+ *   - src/ai/flows/analyze-physics-problem.ts → Logica de analiză
+ * 
+ * AI Client:
+ *   - src/ai/groq.ts                      → Client Groq API
+ *   - src/ai/request-throttle.ts          → Throttling pentru request-uri
+ * 
+ * Exemple:
+ *   - src/app/api-client-example/page.tsx → Exemplu complet de utilizare
+ * 
+ * 
+ * 📞 SUPPORT ȘI CONTRIBUTII
+ * ====================================================================================
+ * 
+ * Pentru întrebări sau probleme:
+ *   - Verifică log-urile serverului pentru detalii despre erori
+ *   - Asigură-te că toate variabilele de mediu sunt setate corect
+ *   - Verifică că request-urile respectă formatul documentat
+ * 
+ * 
+ * ====================================================================================
+ * SFÂRȘIT DOCUMENTAȚIE API
+ * ====================================================================================
+ */
+
 import React, { useState, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

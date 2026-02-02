@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon, Trash2, FileImage, Wand2 } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon, Trash2, FileImage, Wand2, ClipboardList, ListChecks, Calculator, Trophy } from 'lucide-react';
 import Image from 'next/image';
 import { handleAnalyzeProblem } from './actions';
 import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DropZone from "@/components/ui/drop-zone";
 import SolveProblemForm from '@/components/solve-problem-form';
+import Markdown from "@/components/ui/markdown";
 
 interface SolutionImage {
   file: File;
@@ -26,6 +27,7 @@ interface SolutionImage {
 export default function PhysicsProblemSolverPage() {
   const [problemText, setProblemText] = useState<string>('');
   const [problemImage, setProblemImage] = useState<SolutionImage | null>(null);
+  const [solutionText, setSolutionText] = useState<string>('');
   const [solutionImages, setSolutionImages] = useState<SolutionImage[]>([]);
   const [additionalContext, setAdditionalContext] = useState<string>('');
   const [analysisResult, setAnalysisResult] = useState<AnalyzePhysicsProblemOutput | null>(null);
@@ -115,6 +117,11 @@ export default function PhysicsProblemSolverPage() {
       setError(null); // Clear error when context changes
   }
 
+  const handleSolutionTextChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setSolutionText(e.target.value);
+      setError(null); // Clear error when text changes
+  }
+
   const removeProblemImage = () => {
     setProblemImage(null);
   };
@@ -133,12 +140,12 @@ export default function PhysicsProblemSolverPage() {
         })
         return;
     }
-    if (solutionImages.length === 0) { // Check if array is empty
-      setError('Te rog încarcă cel puțin o imagine cu rezolvarea.');
+    if (!solutionText.trim() && solutionImages.length === 0) {
+      setError('Te rog introdu textul soluției SAU încarcă cel puțin o imagine cu rezolvarea.');
       toast({
           variant: "destructive",
           title: "Eroare",
-          description: "Te rog încarcă cel puțin o imagine cu rezolvarea.",
+          description: "Te rog introdu textul soluției SAU încarcă cel puțin o imagine cu rezolvarea.",
         })
       return;
     }
@@ -151,11 +158,12 @@ export default function PhysicsProblemSolverPage() {
     try {
       const solutionPhotoDataUris = solutionImages.map(img => img.previewUrl); // Get array of data URIs
 
-      // Pass problem text, optional problem image URI, solution photo URIs, and additional context to the action
+      // Pass problem text, optional problem image URI, solution text, solution photo URIs, and additional context to the action
       const result = await handleAnalyzeProblem({
         problemText: problemText.trim() || undefined, // Send undefined if empty
         problemPhotoDataUri: problemImage?.previewUrl, // Send undefined if null
-        solutionPhotoDataUris, // Pass the array
+        solutionText: solutionText.trim() || undefined, // Send undefined if empty
+        solutionPhotoDataUris: solutionPhotoDataUris.length > 0 ? solutionPhotoDataUris : undefined, // Send undefined if empty
         additionalContext: additionalContext.trim() || undefined, // Send undefined if empty
       });
 
@@ -304,58 +312,82 @@ export default function PhysicsProblemSolverPage() {
                   </div>
                 </div>
 
-                {/* Right column - Solution Images */}
+                {/* Right column - Solution Input */}
                 <div className="space-y-4">
-                  <Label htmlFor="solution-images" className="font-semibold flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-primary" /> Imagini cu Rezolvarea
-                  </Label>
-                  <Input
-                    id="solution-images"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleSolutionFilesChange}
-                    ref={solutionInputRef}
-                    className="hidden"
-                  />
-                  <DropZone
-                    accept="image/*"
-                    multiple
-                    onFiles={(files) => {
-                      const fileList = Array.isArray(files) ? files : Array.from(files)
-                      const dt = new DataTransfer()
-                      fileList.forEach(f => dt.items.add(f))
-                      const fakeInput = document.createElement('input')
-                      const fakeEvent = { target: { files: dt.files } } as unknown as ChangeEvent<HTMLInputElement>
-                      handleSolutionFilesChange(fakeEvent)
-                    }}
-                    className="w-full"
-                  >
-                    <div className="flex flex-col items-center gap-2 w-full">
-                      <Upload className="h-4 w-4" />
-                      <span className="text-sm">Trage imaginile soluției sau fă click</span>
-                    </div>
-                  </DropZone>
+                  {/* Solution Text Input */}
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="solution-text" className="font-semibold flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-primary" /> Textul Soluției (Opțional)
+                    </Label>
+                    <Textarea
+                      id="solution-text"
+                      placeholder="Scrie aici soluția ta..."
+                      value={solutionText}
+                      onChange={handleSolutionTextChange}
+                      className="h-32 resize-none"
+                      disabled={solutionImages.length > 0}
+                    />
+                  </div>
 
-                  {/* Solution Images Preview */}
-                  <div className="grid grid-cols-1 gap-4 mt-4">
-                    {solutionImages.map((image, index) => (
-                      <div key={index} className="relative">
-                        <img
-                          src={image.previewUrl}
-                          alt={`Soluție ${index + 1}`}
-                          className="w-full h-auto rounded-lg border border-gray-200"
-                        />
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className="absolute top-2 right-2"
-                          onClick={() => removeSolutionImage(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                  <div className="text-center text-sm text-muted-foreground font-medium my-2">SAU</div>
+
+                  {/* Solution Images Upload */}
+                  <div className="space-y-2">
+                    <Label htmlFor="solution-images" className="font-semibold flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-primary" /> Imagini cu Rezolvarea (Opțional)
+                    </Label>
+                    <Input
+                      id="solution-images"
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleSolutionFilesChange}
+                      ref={solutionInputRef}
+                      className="hidden"
+                      disabled={!!solutionText.trim()}
+                    />
+                    <DropZone
+                      accept="image/*"
+                      multiple
+                      disabled={!!solutionText.trim()}
+                      onFiles={(files) => {
+                        const fileList = Array.isArray(files) ? files : Array.from(files)
+                        const dt = new DataTransfer()
+                        fileList.forEach(f => dt.items.add(f))
+                        const fakeInput = document.createElement('input')
+                        const fakeEvent = { target: { files: dt.files } } as unknown as ChangeEvent<HTMLInputElement>
+                        handleSolutionFilesChange(fakeEvent)
+                      }}
+                      className="w-full"
+                    >
+                      <div className="flex flex-col items-center gap-2 w-full">
+                        <Upload className="h-4 w-4" />
+                        <span className="text-sm">Trage imaginile soluției sau fă click</span>
                       </div>
-                    ))}
+                    </DropZone>
+
+                    {/* Solution Images Preview */}
+                    {solutionImages.length > 0 && (
+                      <div className="grid grid-cols-1 gap-4 mt-4">
+                        {solutionImages.map((image, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={image.previewUrl}
+                              alt={`Soluție ${index + 1}`}
+                              className="w-full h-auto rounded-lg border border-gray-200"
+                            />
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="absolute top-2 right-2"
+                              onClick={() => removeSolutionImage(index)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -365,7 +397,7 @@ export default function PhysicsProblemSolverPage() {
                 <Button
                   ref={solveButtonRef}
                   onClick={handleSubmit}
-                  disabled={isLoading || (!problemText.trim() && !problemImage) || solutionImages.length === 0}
+                  disabled={isLoading || (!problemText.trim() && !problemImage) || (!solutionText.trim() && solutionImages.length === 0)}
                   className="w-full max-w-xs"
                 >
                   {isLoading ? (
@@ -393,18 +425,46 @@ export default function PhysicsProblemSolverPage() {
 
               {/* Analysis Result */}
               {analysisResult && (
-                <div ref={analysisResultRef} className="mt-6 space-y-4">
-                  <Alert>
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertTitle>Rezultat Analiză</AlertTitle>
-                    <AlertDescription>
-                      <div className="space-y-2">
-                        <p><strong>Soluție corectă:</strong> {analysisResult.solution}</p>
-                        <p><strong>Analiza erorilor:</strong> {analysisResult.errorAnalysis}</p>
-                        <p><strong>Punctaj:</strong> {analysisResult.rating}</p>
+                <div ref={analysisResultRef} className="space-y-6 mt-6 border-t pt-6">
+                  <div className="space-y-6">
+                    {analysisResult.solution && (
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h3 className="font-semibold mb-3 text-blue-800 flex items-center gap-2">
+                          <ClipboardList className="h-4 w-4" />
+                          📋 Soluția Corectă:
+                        </h3>
+                        <div className="prose max-w-none text-blue-900">
+                          <Markdown>{analysisResult.solution}</Markdown>
+                        </div>
                       </div>
-                    </AlertDescription>
-                  </Alert>
+                    )}
+
+                    {analysisResult.errorAnalysis && (
+                      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h3 className="font-semibold mb-3 text-green-800 flex items-center gap-2">
+                          <Lightbulb className="h-4 w-4" />
+                          💡 Analiza Erorilor:
+                        </h3>
+                        <div className="prose max-w-none text-green-900">
+                          <Markdown>{analysisResult.errorAnalysis}</Markdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {analysisResult.rating && (
+                      <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                        <h3 className="font-semibold mb-3 text-yellow-800 flex items-center gap-2">
+                          <Trophy className="h-4 w-4" />
+                          🎯 Punctaj:
+                        </h3>
+                        <div className="bg-white p-4 rounded border border-yellow-100">
+                          <div className="text-lg font-medium prose max-w-none text-yellow-900">
+                            <Markdown>{analysisResult.rating}</Markdown>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </TabsContent>
