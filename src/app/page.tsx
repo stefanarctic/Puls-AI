@@ -424,49 +424,193 @@ export default function PhysicsProblemSolverPage() {
               )}
 
               {/* Analysis Result */}
-              {analysisResult && (
-                <div ref={analysisResultRef} className="space-y-6 mt-6 border-t pt-6">
-                  <div className="space-y-6">
-                    {analysisResult.solution && (
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <h3 className="font-semibold mb-3 text-blue-800 flex items-center gap-2">
-                          <ClipboardList className="h-4 w-4" />
-                          📋 Soluția Corectă:
-                        </h3>
-                        <div className="prose max-w-none text-blue-900">
-                          <Markdown>{analysisResult.solution}</Markdown>
-                        </div>
-                      </div>
-                    )}
+              {analysisResult && (() => {
+                // Extract rating from JSON in solution or errorAnalysis text
+                const extractRatingFromJson = (text: string): string | null => {
+                  if (!text) return null;
+                  
+                  // First, try to find and parse complete JSON objects (more robust)
+                  const jsonMatches = text.match(/\{[\s\S]{0,3000}?\}/g);
+                  if (jsonMatches) {
+                    for (const jsonStr of jsonMatches) {
+                      try {
+                        const parsed = JSON.parse(jsonStr);
+                        if (parsed.rating && typeof parsed.rating === 'string') {
+                          const rating = parsed.rating.trim();
+                          if (rating && rating !== '—/10 puncte' && rating !== '-/10 puncte') {
+                            return rating;
+                          }
+                        }
+                      } catch {
+                        // Try to extract rating directly from JSON string even if not valid JSON
+                        const ratingMatch = jsonStr.match(/"rating"\s*:\s*"([^"]+)"/);
+                        if (ratingMatch && ratingMatch[1]) {
+                          const rating = ratingMatch[1].trim();
+                          if (rating && rating !== '—/10 puncte' && rating !== '-/10 puncte') {
+                            return rating;
+                          }
+                        }
+                      }
+                    }
+                  }
 
-                    {analysisResult.errorAnalysis && (
-                      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                        <h3 className="font-semibold mb-3 text-green-800 flex items-center gap-2">
-                          <Lightbulb className="h-4 w-4" />
-                          💡 Analiza Erorilor:
-                        </h3>
-                        <div className="prose max-w-none text-green-900">
-                          <Markdown>{analysisResult.errorAnalysis}</Markdown>
-                        </div>
-                      </div>
-                    )}
+                  // Try regex patterns for rating extraction from JSON
+                  const jsonPatterns = [
+                    /"rating"\s*:\s*"([^"]+)"/,
+                    /"rating"\s*:\s*'([^']+)'/,
+                    /"rating"\s*:\s*([^",}\]]+)/,
+                    /rating["\s]*:["\s]*([^",}\]]+)/i,
+                  ];
 
-                    {analysisResult.rating && (
+                  for (const pattern of jsonPatterns) {
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                      const rating = match[1].trim();
+                      // Make sure it looks like a score and is not a placeholder
+                      if (rating && rating !== '—/10 puncte' && rating !== '-/10 puncte' && 
+                          (/\d/.test(rating) || rating.includes('/'))) {
+                        return rating;
+                      }
+                    }
+                  }
+
+                  // Also try to extract "Punctaj total: X/Y puncte" patterns from plain text
+                  const plainTextPatterns = [
+                    /Punctaj\s+total:\s*(\d+\/\d+\s*puncte)/i,
+                    /Punctaj\s+obținut:\s*(\d+\/\d+\s*puncte)/i,
+                    /Punctaj:\s*(\d+\/\d+\s*puncte)/i,
+                    /(\d+\/\d+\s*puncte)/,
+                  ];
+
+                  for (const pattern of plainTextPatterns) {
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                      return match[1].trim();
+                    }
+                  }
+
+                  return null;
+                };
+
+                // Clean text by removing JSON and score breakdown
+                const cleanText = (text: string): string => {
+                  if (!text) return text;
+                  
+                  let cleaned = text;
+                  
+                  // Remove full JSON object - be precise to avoid breaking formulas
+                  // Match JSON that has proper structure with quotes and commas
+                  cleaned = cleaned.replace(/\{\s*"solution"\s*:\s*\{[\s\S]*?\},\s*"errorAnalysis"\s*:\s*"[\s\S]*?",\s*"rating"\s*:\s*"[\s\S]*?"\s*\}/g, '');
+                  cleaned = cleaned.replace(/\{\s*"solution"\s*:\s*"[\s\S]*?",\s*"errorAnalysis"\s*:\s*"[\s\S]*?",\s*"rating"\s*:\s*"[\s\S]*?"\s*\}/g, '');
+                  cleaned = cleaned.replace(/\{\s*"rating"\s*:\s*"[^"]*"\s*\}/g, '');
+                  
+                  // Remove score breakdown patterns
+                  // Pattern: "a) Perioada de oscilație T: 3 puncte (corect)"
+                  // Only match complete lines ending with "puncte (corect)" to avoid breaking formulas
+                  cleaned = cleaned.replace(/^[a-z]\)\s+[^:]*:\s+\d+\s+puncte\s+\([^)]*\)\s*$/gmi, '');
+                  // Pattern: "Punctaj total: 10/10 puncte"
+                  cleaned = cleaned.replace(/Punctaj\s+total:\s*\d+\/\d+\s+puncte/gi, '');
+                  cleaned = cleaned.replace(/Punctaj\s+obținut:\s*\d+\/\d+\s+puncte/gi, '');
+                  // Pattern: "Punctaj: X/10 puncte" (standalone)
+                  cleaned = cleaned.replace(/Punctaj:\s*\d+\/\d+\s+puncte/gi, '');
+                  
+                  // DON'T remove JSON-like structures that might be part of formulas
+                  // The JSON removal above should be sufficient
+                  
+                  // Remove empty lines and extra whitespace
+                  cleaned = cleaned.replace(/\n\s*\n\s*\n/g, '\n\n');
+                  
+                  return cleaned.trim();
+                };
+
+                // IMPORTANT: Extract rating BEFORE cleaning the text!
+                // Try to extract rating from all possible sources
+                // Priority: 1) JSON in solution, 2) JSON in errorAnalysis, 3) direct rating field
+                const extractedRating = extractRatingFromJson(analysisResult.solution || '') || 
+                                       extractRatingFromJson(analysisResult.errorAnalysis || '') ||
+                                       (analysisResult.rating && analysisResult.rating.trim() && analysisResult.rating !== '—/10 puncte' ? analysisResult.rating.trim() : null);
+
+                // Clean solution and errorAnalysis text AFTER extracting rating
+                const cleanedSolution = cleanText(analysisResult.solution || '');
+                const cleanedErrorAnalysis = cleanText(analysisResult.errorAnalysis || '');
+
+                return (
+                  <div ref={analysisResultRef} className="space-y-6 mt-6 border-t pt-6">
+                    <div className="space-y-6">
+                      {/* Punctaj Obținut - First Section */}
                       <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                         <h3 className="font-semibold mb-3 text-yellow-800 flex items-center gap-2">
                           <Trophy className="h-4 w-4" />
-                          🎯 Punctaj:
+                          🎯 Punctaj Obținut:
                         </h3>
                         <div className="bg-white p-4 rounded border border-yellow-100">
                           <div className="text-lg font-medium prose max-w-none text-yellow-900">
-                            <Markdown>{analysisResult.rating}</Markdown>
+                            {extractedRating ? (
+                              <Markdown>{extractedRating}</Markdown>
+                            ) : (
+                              <span className="text-muted-foreground">Punctajul nu a putut fi extras. Verifică console pentru detalii.</span>
+                            )}
                           </div>
                         </div>
                       </div>
-                    )}
+
+                      {/* Problem Summary and Solution Summary - Side by side */}
+                      {(cleanedSolution || cleanedErrorAnalysis) && (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {cleanedSolution && (
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                              <h3 className="font-semibold mb-2 text-slate-800 flex items-center gap-2">
+                                <FileText className="h-4 w-4" />
+                                Rezumat Problemă
+                              </h3>
+                              <div className="prose max-w-none text-slate-900">
+                                <Markdown>{cleanedSolution.split('\n').slice(0, 3).join('\n')}</Markdown>
+                              </div>
+                            </div>
+                          )}
+                          {cleanedErrorAnalysis && (
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                              <h3 className="font-semibold mb-2 text-slate-800 flex items-center gap-2">
+                                <ListChecks className="h-4 w-4" />
+                                Rezumat Analiză
+                              </h3>
+                              <div className="prose max-w-none text-slate-900">
+                                <Markdown>{cleanedErrorAnalysis.split('\n').slice(0, 3).join('\n')}</Markdown>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Solution Steps */}
+                      {cleanedSolution && (
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <h3 className="font-semibold mb-3 text-blue-800 flex items-center gap-2">
+                            <ClipboardList className="h-4 w-4" />
+                            📋 Pașii Rezolvării:
+                          </h3>
+                          <div className="prose max-w-none text-blue-900">
+                            <Markdown>{cleanedSolution}</Markdown>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error Analysis / Detailed Explanations */}
+                      {cleanedErrorAnalysis && (
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                          <h3 className="font-semibold mb-3 text-green-800 flex items-center gap-2">
+                            <Lightbulb className="h-4 w-4" />
+                            💡 Analiza Erorilor și Explicații Detaliate:
+                          </h3>
+                          <div className="prose max-w-none text-green-900">
+                            <Markdown>{cleanedErrorAnalysis}</Markdown>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </TabsContent>
 
             <TabsContent value="solve">
