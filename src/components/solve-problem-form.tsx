@@ -64,12 +64,15 @@
  *   - Format Data URI: 'data:<mimetype>;base64,<encoded_data>'
  *   - Exemplu: 'data:image/png;base64,iVBORw0KGgoAAAANS...'
  * 
- * RESPONSE SUCCES (200 OK):
+ * RESPONSE SUCCES (200 OK) - Contract unificat:
  *   {
- *     "solution": string,        // Pașii detaliați ai rezolvării (markdown permis)
- *     "explanation": string,      // Explicații detaliate pentru fiecare pas (markdown permis)
- *     "formulas": string[],       // Array cu formulele folosite (fiecare în format MathJax)
- *     "finalAnswer": string       // Răspunsul final cu unități de măsură
+ *     "problemSummary"?: string,
+ *     "givenData"?: { label, value, unit? }[],     // Date din enunț
+ *     "numericalResults"?: { label, value, unit? }[],
+ *     "formulasUsed"?: string[],
+ *     "explanation"?: string,
+ *     "correctSolution"?: string,
+ *     "finalAnswer"?: string
  *   }
  * 
  * RESPONSE EROARE (400 Bad Request):
@@ -121,11 +124,19 @@
  *   - Trebuie furnizat cel puțin UNUL dintre: solutionText SAU solutionPhotoDataUris (cu cel puțin 1 element)
  *   - Fiecare Data URI trebuie să respecte formatul: 'data:<mimetype>;base64,<encoded_data>'
  * 
- * RESPONSE SUCCES (200 OK):
+ * RESPONSE SUCCES (200 OK) - Contract unificat:
  *   {
- *     "solution": string,        // Soluția corectă a problemei (markdown permis)
- *     "errorAnalysis": string,   // Analiza erorilor din soluția utilizatorului (markdown permis)
- *     "rating": string           // Punctajul obținut (ex: "7/10 puncte")
+ *     "rating": string | { obtained: number, max: number },
+ *     "problemSummary"?: string,
+ *     "feedbackSummary"?: string,
+ *     "studentWorkReflection"?: string,
+ *     "givenData"?: { label, value, unit? }[],
+ *     "numericalResults"?: { label, value, unit? }[],
+ *     "formulasUsed"?: string[],
+ *     "explanation"?: string,
+ *     "correctSolution"?: string,
+ *     "errorAnalysis"?: string,
+ *     "finalAnswer"?: string
  *   }
  * 
  * RESPONSE EROARE (400 Bad Request):
@@ -397,10 +408,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import Markdown from "@/components/ui/markdown";
-import { Upload, CheckCircle, XCircle, FileText, FileImage, Trash2, ListChecks, ClipboardList } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, FileText, FileImage, Trash2, ListChecks, ClipboardList, Calculator } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { Conversation } from '@elevenlabs/client';
-import { Anybody } from 'next/font/google';
+import { handleSolveProblem } from '@/app/actions';
+import type { SolveContractOutput, NumericalResult } from '@/ai/types/api-contract';
 
 interface SolutionImage {
   file: File;
@@ -413,16 +424,19 @@ interface SolveProblemFormProps {
   variant?: SolveProblemFormVariant;
 }
 
-interface ElevenLabsSolveResult {
+/** Unified display type: ElevenLabs + API contract (SolveContractOutput) */
+interface SolveResultDisplay {
   problemSummary?: string;
   solutionSummary?: string;
   solution?: string;
+  correctSolution?: string;
   explanation?: string;
   formulas?: string[];
+  formulasUsed?: string[];
+  givenData?: NumericalResult[];
+  numericalResults?: NumericalResult[];
   finalAnswer?: string;
 }
-
-const ELEVENLABS_AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID;
 
 const containsMathDelimiters = (value: string): boolean => {
   return /(\$\$?|\\\[|\\\(|\\begin\{)/.test(value);
@@ -439,7 +453,7 @@ export default function SolveProblemForm({ variant = 'standalone' }: SolveProble
   const [problemText, setProblemText] = useState<string>('');
   const [problemImage, setProblemImage] = useState<SolutionImage | null>(null);
   const [additionalContext, setAdditionalContext] = useState<string>('');
-  const [solutionResult, setSolutionResult] = useState<ElevenLabsSolveResult | null>(null);
+  const [solutionResult, setSolutionResult] = useState<SolveResultDisplay | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -489,149 +503,6 @@ export default function SolveProblemForm({ variant = 'standalone' }: SolveProble
     setProblemImage(null);
   };
 
-  const parseAgentResponse = (raw: string): ElevenLabsSolveResult | null => {
-    const attemptParsers: Array<() => unknown> = [
-      () => {
-        const match = raw.match(/```json\s*([\s\S]*?)```/i);
-        return match ? JSON.parse(match[1]) : undefined;
-      },
-      () => {
-        const match = raw.match(/```\s*([\s\S]*?)```/);
-        return match ? JSON.parse(match[1]) : undefined;
-      },
-      () => {
-        const match = raw.match(/\{[\s\S]*\}/);
-        return match ? JSON.parse(match[0]) : undefined;
-      },
-      () => JSON.parse(raw),
-    ];
-
-    for (const parser of attemptParsers) {
-      try {
-        const result = parser();
-        if (result && typeof result === 'object') {
-          return result as ElevenLabsSolveResult;
-        }
-      } catch {
-        continue;
-      }
-    }
-    return null;
-  };
-
-  const requestSolutionFromElevenLabs = async (): Promise<ElevenLabsSolveResult> => {
-    if (!ELEVENLABS_AGENT_ID) {
-      throw new Error('Lipsește NEXT_PUBLIC_ELEVENLABS_AGENT_ID în mediul de execuție.');
-    }
-
-    const userDetails = [
-      problemText.trim() ? `Text problemă:\n${problemText.trim()}` : '',
-      problemImage?.previewUrl ? `Imagine problemă (Data URI):\n${problemImage.previewUrl}` : '',
-      additionalContext.trim() ? `Context suplimentar:\n${additionalContext.trim()}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-
-    const instructions = `Ești expert în fizică și răspunzi DOAR în limba română. Primești detaliile unei probleme și trebuie să generezi un răspuns structurat.
-
-OBIECTIV: oferă o soluție clară, riguroasă și verificabilă.
-
-REGULI:
-1. Începe prin a reformula foarte pe scurt problema în câmpul "problemSummary" (max 2 fraze).
-2. Include o sinteză a abordării în câmpul "solutionSummary" (max 3 fraze).
-3. Prezintă pașii compleți ai rezolvării în "solution" (markdown permis).
-4. Explică conceptele cheie și justificările în "explanation" (markdown permis).
-5. Listează formulele folosite în "formulas" ca array de string-uri.
-6. Furnizează răspunsul final clar, cu unități, în "finalAnswer".
-7. Respectă formatul JSON: {"problemSummary":"","solutionSummary":"","solution":"","explanation":"","formulas":[""],"finalAnswer":""}
-8. Dacă informațiile sunt insuficiente, explică situația în toate câmpurile și sugerează clarificări.
-
-IMPORTANT - FORMATARE MATEMATICĂ:
-- Pentru TOATE expresiile matematice în "solution" și "explanation", folosește OBLIGATORIU delimitatori MathJax: $$expresie$$
-- Exemplu corect: "Formula $$\\Delta x = \\frac{\\lambda}{2}$$ este valabilă pentru sistemele de interferență."
-- Exemplu corect: "Diferența de drum este $$\\Delta d = n\\lambda, \\quad n \\in \\mathbb{Z}$$."
-- NU lăsa expresiile LaTeX neformatate (fără $$). Toate expresiile matematice trebuie să fie în $$...$$
-- Pentru formule simple inline în text, poți folosi $expresie$ (cu un singur $ pe fiecare parte)
-- În câmpul "formulas", fiecare formulă trebuie să fie deja în format MathJax cu $$...$$
-
-Nu include text în afara obiectului JSON.`;
-
-    const prompt = `${instructions}
-
-DETALII UTILIZATOR:
-${userDetails || 'Utilizatorul nu a furnizat text, doar imaginea atașată.'}`;
-
-    return new Promise((resolve, reject) => {
-      let conversationInstance: Conversation | null = null;
-      let aiBuffer = '';
-      let settled = false;
-      const timeoutId = setTimeout(() => {
-        if (!settled) {
-          finishError(new Error('Agentul ElevenLabs nu a răspuns la timp. Încearcă din nou.'));
-        }
-      }, 60_000);
-
-      const cleanup = async () => {
-        clearTimeout(timeoutId);
-        if (conversationInstance) {
-          try {
-            await conversationInstance.endSession();
-          } catch {
-            // Ignore end session errors
-          }
-          conversationInstance = null;
-        }
-      };
-
-      const finishSuccess = async (payload: ElevenLabsSolveResult) => {
-        if (settled) return;
-        settled = true;
-        await cleanup();
-        resolve(payload);
-      };
-
-      const finishError = async (err: unknown) => {
-        if (settled) return;
-        settled = true;
-        await cleanup();
-        if (err instanceof Error) {
-          reject(err);
-        } else {
-          reject(new Error('Conversatia ElevenLabs s-a încheiat cu o eroare.'));
-        }
-      };
-
-      (async () => {
-        try {
-          conversationInstance = await Conversation.startSession({
-        agentId: ELEVENLABS_AGENT_ID,
-        connectionType: 'websocket',
-        textOnly: true,
-        onMessage: ({ source, message }) => {
-          if (source !== 'ai' || !message) return;
-          aiBuffer += message;
-          const parsed = parseAgentResponse(aiBuffer);
-          if (parsed) {
-            finishSuccess(parsed);
-          }
-        },
-        onDisconnect: () => {
-          if (!settled) {
-            finishError(new Error('Conversația s-a închis înainte de a primi răspunsul.'));
-          }
-        },
-        onError: (err: any) => {
-          finishError(err instanceof Error ? err : new Error(String(err)));
-        },
-          });
-          conversationInstance.sendUserMessage(prompt);
-        } catch (err) {
-          finishError(err);
-        }
-      })();
-    });
-  };
-
   const handleSubmit = async () => {
     if (!problemText.trim() && !problemImage) {
       setError('Te rog introdu textul problemei SAU încarcă o imagine a problemei.');
@@ -648,26 +519,31 @@ ${userDetails || 'Utilizatorul nu a furnizat text, doar imaginea atașată.'}`;
     setSolutionResult(null);
 
     try {
-      const result = await requestSolutionFromElevenLabs();
-      const sanitized: ElevenLabsSolveResult = {
-        problemSummary: result.problemSummary?.trim() || '',
-        solutionSummary: result.solutionSummary?.trim() || '',
-        solution: result.solution?.trim() || '',
-        explanation: result.explanation?.trim() || '',
-        formulas: Array.isArray(result.formulas) ? result.formulas : [],
-        finalAnswer: result.finalAnswer?.trim() || '',
+      const apiResult = await handleSolveProblem({
+        problemText: problemText.trim() || undefined,
+        problemPhotoDataUri: problemImage?.previewUrl,
+        additionalContext: additionalContext.trim() || undefined,
+      });
+      if (apiResult.error) throw new Error(apiResult.error);
+      if (!apiResult.data) throw new Error('Nu s-a primit răspuns de la server.');
+      const data = apiResult.data as SolveContractOutput;
+      const result: SolveResultDisplay = {
+        problemSummary: data.problemSummary,
+        correctSolution: data.correctSolution,
+        explanation: data.explanation,
+        formulasUsed: data.formulasUsed ?? [],
+        givenData: data.givenData,
+        numericalResults: data.numericalResults,
+        finalAnswer: data.finalAnswer,
       };
+      toast({ title: "Succes", description: "Soluția a fost generată." });
 
-      setSolutionResult(sanitized);
+      setSolutionResult(result);
       setTimeout(() => {
         solutionResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
-      toast({
-        title: "Succes",
-        description: "Agentul ElevenLabs a generat o soluție.",
-      });
     } catch (err) {
-      console.error('Error solving problem via ElevenLabs:', err);
+      console.error('Error solving problem:', err);
       const message = err instanceof Error ? err.message : 'A apărut o eroare necunoscută la rezolvarea problemei.';
       setError(message);
       toast({
@@ -792,7 +668,10 @@ ${userDetails || 'Utilizatorul nu a furnizat text, doar imaginea atașată.'}`;
         </div>
       )}
 
-      {solutionResult && (
+      {solutionResult && (() => {
+        const solutionSteps = solutionResult.correctSolution ?? solutionResult.solution;
+        const formulas = solutionResult.formulasUsed ?? solutionResult.formulas ?? [];
+        return (
         <div ref={solutionResultRef} className="space-y-6 mt-6 border-t pt-6">
           <div className="space-y-6">
             {(solutionResult.problemSummary || solutionResult.solutionSummary) && (
@@ -822,40 +701,98 @@ ${userDetails || 'Utilizatorul nu a furnizat text, doar imaginea atașată.'}`;
               </div>
             )}
 
-            {solutionResult.solution && (
+            {/* Data tables: givenData and numericalResults (from API contract) */}
+            {((solutionResult.givenData?.length ?? 0) > 0 || (solutionResult.numericalResults?.length ?? 0) > 0) && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {solutionResult.givenData && solutionResult.givenData.length > 0 && (
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h3 className="font-semibold mb-2 text-slate-800 flex items-center gap-2">
+                      <Calculator className="h-4 w-4" />
+                      Date din enunț
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2">Parametru</th>
+                            <th className="text-left py-2">Valoare</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {solutionResult.givenData.map((row, i) => (
+                            <tr key={i} className="border-b border-slate-100">
+                              <td className="py-2">{row.label}</td>
+                              <td className="py-2">{row.value}{row.unit ? ` ${row.unit}` : ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {solutionResult.numericalResults && solutionResult.numericalResults.length > 0 && (
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h3 className="font-semibold mb-2 text-slate-800 flex items-center gap-2">
+                      <Calculator className="h-4 w-4" />
+                      Rezultate calculate
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2">Rezultat</th>
+                            <th className="text-left py-2">Valoare</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {solutionResult.numericalResults.map((row, i) => (
+                            <tr key={i} className="border-b border-slate-100">
+                              <td className="py-2">{row.label}</td>
+                              <td className="py-2">{row.value}{row.unit ? ` ${row.unit}` : ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {solutionSteps && (
               <div className={`p-4 rounded-lg border ${
-                solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') ||
-                solutionResult.solution.toLowerCase().includes('te rog specifică') ||
-                solutionResult.solution.toLowerCase().includes('nu este clar')
+                solutionSteps.toLowerCase().includes('văd mai multe exerciții') ||
+                solutionSteps.toLowerCase().includes('te rog specifică') ||
+                solutionSteps.toLowerCase().includes('nu este clar')
                   ? 'bg-orange-50 border-orange-200'
                   : 'bg-blue-50 border-blue-200'
               }`}>
                 <h3 className={`font-semibold mb-3 flex items-center gap-2 ${
-                  solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') ||
-                  solutionResult.solution.toLowerCase().includes('te rog specifică') ||
-                  solutionResult.solution.toLowerCase().includes('nu este clar')
+                  solutionSteps.toLowerCase().includes('văd mai multe exerciții') ||
+                  solutionSteps.toLowerCase().includes('te rog specifică') ||
+                  solutionSteps.toLowerCase().includes('nu este clar')
                     ? 'text-orange-800'
                     : 'text-blue-800'
                 }`}>
-                  {solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') ||
-                   solutionResult.solution.toLowerCase().includes('te rog specifică') ||
-                   solutionResult.solution.toLowerCase().includes('nu este clar')
+                  {solutionSteps.toLowerCase().includes('văd mai multe exerciții') ||
+                   solutionSteps.toLowerCase().includes('te rog specifică') ||
+                   solutionSteps.toLowerCase().includes('nu este clar')
                     ? '❓ Clarificare Necesară:'
                     : '📋 Pașii Rezolvării:'
                   }
                 </h3>
                 <div className={`prose max-w-none ${
-                  solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') ||
-                  solutionResult.solution.toLowerCase().includes('te rog specifică') ||
-                  solutionResult.solution.toLowerCase().includes('nu este clar')
+                  solutionSteps.toLowerCase().includes('văd mai multe exerciții') ||
+                  solutionSteps.toLowerCase().includes('te rog specifică') ||
+                  solutionSteps.toLowerCase().includes('nu este clar')
                     ? 'text-orange-900'
                     : 'text-blue-900'
                 }`}>
-                  <Markdown>{solutionResult.solution}</Markdown>
+                  <Markdown>{solutionSteps}</Markdown>
                 </div>
-                {(solutionResult.solution.toLowerCase().includes('văd mai multe exerciții') ||
-                  solutionResult.solution.toLowerCase().includes('te rog specifică') ||
-                  solutionResult.solution.toLowerCase().includes('nu este clar')) && (
+                {(solutionSteps.toLowerCase().includes('văd mai multe exerciții') ||
+                  solutionSteps.toLowerCase().includes('te rog specifică') ||
+                  solutionSteps.toLowerCase().includes('nu este clar')) && (
                   <div className="mt-3 p-3 bg-orange-100 rounded border border-orange-300">
                     <p className="text-sm text-orange-800 font-medium">
                       💡 Pentru a continua, te rog să specifici în câmpul "Context Adițional" care exercițiu vrei rezolvat, apoi apasă din nou "Rezolvă Problema".
@@ -876,13 +813,13 @@ ${userDetails || 'Utilizatorul nu a furnizat text, doar imaginea atașată.'}`;
               </div>
             )}
 
-            {solutionResult.formulas && solutionResult.formulas.length > 0 && (
+            {formulas.length > 0 && (
               <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                 <h3 className="font-semibold mb-3 text-purple-800 flex items-center gap-2">
                   🧮 Formule Folosite:
                 </h3>
                 <div className="space-y-3">
-                  {solutionResult.formulas.map((formula, index) => (
+                  {formulas.map((formula, index) => (
                     <div key={index} className="bg-white p-3 rounded border border-purple-100">
                       <div className="prose max-w-none text-purple-900">
                         <Markdown>{wrapAsDisplayMath(formula)}</Markdown>
@@ -907,7 +844,8 @@ ${userDetails || 'Utilizatorul nu a furnizat text, doar imaginea atașată.'}`;
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 

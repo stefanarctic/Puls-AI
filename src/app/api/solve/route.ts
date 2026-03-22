@@ -45,5 +45,6 @@ export async function POST(request: NextRequest) {
 
   apiResponse.headers.set('Access-Control-Allow-Origin', '*');
   apiResponse.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  apiResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   return apiResponse;
 } 

@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Upload, CheckCircle, XCircle, Lightbulb, Star, FileText, Image as ImageIcon, Trash2, FileImage, Calculator } from 'lucide-react';
 import NextImage from 'next/image'; // Renamed to avoid conflict with ImageIcon
-import type { AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
+import type { AnalyzeContractOutput } from '@/ai/types/api-contract';
 import { useToast } from "@/hooks/use-toast";
 import Markdown from "@/components/ui/markdown";
 
@@ -27,7 +27,7 @@ export default function ApiClientExamplePage() {
   const [solutionText, setSolutionText] = useState<string>('');
   const [solutionImageFiles, setSolutionImageFiles] = useState<ImageFile[]>([]);
   
-  const [apiResponse, setApiResponse] = useState<AnalyzePhysicsProblemOutput | null>(null);
+  const [apiResponse, setApiResponse] = useState<AnalyzeContractOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,7 +123,7 @@ export default function ApiClientExamplePage() {
         throw new Error(result.error || `Request failed with status ${response.status}`);
       }
       
-      setApiResponse(result as AnalyzePhysicsProblemOutput);
+      setApiResponse(result as AnalyzeContractOutput);
       toast({ title: "Succes", description: "Analiza a fost primită." });
 
     } catch (err) {
@@ -233,7 +233,10 @@ export default function ApiClientExamplePage() {
             </div>
           )}
 
-          {apiResponse && (
+          {apiResponse && (() => {
+            const formatRating = (r: AnalyzeContractOutput['rating']): string =>
+              typeof r === 'string' ? r : `${r.obtained}/${r.max} puncte`;
+            return (
             <div className="space-y-4 pt-6 border-t mt-6">
               <h3 className="text-xl font-semibold text-primary flex items-center gap-2">
                 <CheckCircle className="w-5 h-5 text-green-600" /> Răspuns API
@@ -242,28 +245,96 @@ export default function ApiClientExamplePage() {
                 <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Star /> Punctaj</CardTitle></CardHeader>
                 <CardContent>
                   <div className="prose max-w-none text-lg font-semibold">
-                    <Markdown>{apiResponse.rating}</Markdown>
+                    <Markdown>{formatRating(apiResponse.rating)}</Markdown>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="bg-secondary">
-                <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Calculator className="w-5 h-5" /> Soluție Corectă</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="prose max-w-none text-sm">
-                    <Markdown>{apiResponse.solution}</Markdown>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="bg-secondary">
-                <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Lightbulb /> Analiză Erori & Feedback</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="prose max-w-none text-sm">
-                    <Markdown>{apiResponse.errorAnalysis}</Markdown>
-                  </div>
-                </CardContent>
-              </Card>
+              {apiResponse.problemSummary && (
+                <Card className="bg-secondary">
+                  <CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileText /> Rezumat Problemă</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="prose max-w-none text-sm"><Markdown>{apiResponse.problemSummary}</Markdown></div>
+                  </CardContent>
+                </Card>
+              )}
+              {apiResponse.feedbackSummary && (
+                <Card className="bg-secondary">
+                  <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Lightbulb /> Rezumat Feedback</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="prose max-w-none text-sm"><Markdown>{apiResponse.feedbackSummary}</Markdown></div>
+                  </CardContent>
+                </Card>
+              )}
+              {((apiResponse.givenData?.length ?? 0) > 0 || (apiResponse.numericalResults?.length ?? 0) > 0) && (
+                <Card className="bg-secondary">
+                  <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Calculator /> Date numerice</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    {apiResponse.givenData && apiResponse.givenData.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2">Date din enunț</h4>
+                        <table className="w-full text-sm border-collapse">
+                          <tbody>
+                            {apiResponse.givenData.map((row, i) => (
+                              <tr key={i} className="border-b"><td className="py-1">{row.label}</td><td className="py-1">{row.value}{row.unit ? ` ${row.unit}` : ''}</td></tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {apiResponse.numericalResults && apiResponse.numericalResults.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2">Rezultate calculate</h4>
+                        <table className="w-full text-sm border-collapse">
+                          <tbody>
+                            {apiResponse.numericalResults.map((row, i) => (
+                              <tr key={i} className="border-b"><td className="py-1">{row.label}</td><td className="py-1">{row.value}{row.unit ? ` ${row.unit}` : ''}</td></tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              {apiResponse.formulasUsed && apiResponse.formulasUsed.length > 0 && (
+                <Card className="bg-secondary">
+                  <CardHeader><CardTitle className="text-lg">Formule folosite</CardTitle></CardHeader>
+                  <CardContent>
+                    <ul className="list-disc list-inside space-y-1">
+                      {apiResponse.formulasUsed.map((f, i) => (
+                        <li key={i}><Markdown>{f}</Markdown></li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+              {apiResponse.correctSolution && (
+                <Card className="bg-secondary">
+                  <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Calculator /> Soluție Corectă</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="prose max-w-none text-sm"><Markdown>{apiResponse.correctSolution}</Markdown></div>
+                  </CardContent>
+                </Card>
+              )}
+              {apiResponse.errorAnalysis && (
+                <Card className="bg-secondary">
+                  <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Lightbulb /> Analiză Erori</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="prose max-w-none text-sm"><Markdown>{apiResponse.errorAnalysis}</Markdown></div>
+                  </CardContent>
+                </Card>
+              )}
+              {apiResponse.finalAnswer && (
+                <Card className="bg-secondary">
+                  <CardHeader><CardTitle className="text-lg">Răspuns final</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="prose max-w-none text-sm font-medium"><Markdown>{apiResponse.finalAnswer}</Markdown></div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
     </div>

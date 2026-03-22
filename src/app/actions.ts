@@ -1,9 +1,6 @@
 'use server';
 
-// Import the updated types and function
 import { analyzePhysicsProblem, type AnalyzePhysicsProblemInput, type AnalyzePhysicsProblemOutput } from '@/ai/flows/analyze-physics-problem';
-// Keep detectErrorAndProvideFeedback import in case it's used elsewhere, but it's not part of the main flow now.
-import { detectErrorAndProvideFeedback, type DetectErrorAndProvideFeedbackInput, type DetectErrorAndProvideFeedbackOutput } from '@/ai/flows/detect-error-and-provide-feedback';
 import { solvePhysicsProblem } from '@/ai/flows/solve-physics-problem';
 import type { SolvePhysicsProblemInput, SolvePhysicsProblemOutput } from '@/ai/flows/solve-physics-problem';
 
@@ -34,19 +31,6 @@ export async function handleAnalyzeProblem(input: AnalyzePhysicsProblemInput): P
   }
 }
 
-// Keep the detectErrorAndProvideFeedback action available in case it's needed later,
-// but it's not currently used by the frontend based on the simplified flow.
-export async function handleDetectError(input: DetectErrorAndProvideFeedbackInput): Promise<ActionResult<DetectErrorAndProvideFeedbackOutput>> {
-    try {
-        const result = await detectErrorAndProvideFeedback(input);
-        return { data: result };
-    } catch (error) {
-        console.error("Error in handleDetectError:", error);
-        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during error detection.';
-        return { error: `A apărut o eroare la detectarea greșelilor: ${errorMessage}` };
-    }
-}
-
 export async function handleSolveProblem(input: SolvePhysicsProblemInput): Promise<ActionResult<SolvePhysicsProblemOutput>> {
   try {
     console.log('handleSolveProblem called with input:', {
@@ -65,11 +49,11 @@ export async function handleSolveProblem(input: SolvePhysicsProblemInput): Promi
     console.log('Calling solvePhysicsProblem...');
     const result = await solvePhysicsProblem(input);
     console.log('solvePhysicsProblem result:', {
-      hasSolution: !!result.solution,
+      hasCorrectSolution: !!result.correctSolution,
       hasExplanation: !!result.explanation,
-      hasFormulas: result.formulas?.length > 0,
+      hasFormulasUsed: (result.formulasUsed ?? []).length > 0,
       hasFinalAnswer: !!result.finalAnswer,
-      solutionLength: result.solution?.length || 0
+      solutionLength: result.correctSolution?.length || 0
     });
     
     return { data: result };
